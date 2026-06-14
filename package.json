@@ -1,0 +1,26 @@
+{
+  "name": "photo-memoir",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "axios": "^1.11.0",
+    "framer-motion": "^12.0.0",
+    "motion": "^12.40.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@vitejs/plugin-react": "^4.4.0",
+    "tailwindcss": "^4.1.11",
+    "vite": "^6.3.0"
+  }
+}

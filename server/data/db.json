@@ -1,0 +1,177 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password": "$2a$10$t3XacjTf9y4T6U7oF/hQ1O/68Fb6rv6KfjoxAhbsDclgTFyVoCgea",
+      "nickname": "管理员"
+    }
+  ],
+  "albums": [
+    {
+      "name": "旅行",
+      "description": "",
+      "cover": "/uploads/1780850137819-ltpi8e.png",
+      "create_time": "2026-06-07T16:35:28.002Z",
+      "id": 1780850128002
+    }
+  ],
+  "photos": [
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1780850137819-ltpi8e.png",
+      "original_url": "/uploads/1780850137819-ltpi8e.png",
+      "width": 0,
+      "height": 0,
+      "name": "vlog3",
+      "title": "vlog3",
+      "description": "",
+      "create_time": "2026-06-07T16:35:38.093Z",
+      "id": 1780850138093.6191
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1780850137894-dht61u.png",
+      "original_url": "/uploads/1780850137894-dht61u.png",
+      "width": 0,
+      "height": 0,
+      "name": "ç¾å¦16",
+      "title": "ç¾å¦16",
+      "description": "",
+      "create_time": "2026-06-07T16:35:38.093Z",
+      "id": 1780850138093.0308
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1780850137961-abcr4o.png",
+      "original_url": "/uploads/1780850137961-abcr4o.png",
+      "width": 0,
+      "height": 0,
+      "name": "ç¾å¦17",
+      "title": "ç¾å¦17",
+      "description": "",
+      "create_time": "2026-06-07T16:35:38.093Z",
+      "id": 1780850138093.6755
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1780850137989-surq66.png",
+      "original_url": "/uploads/1780850137989-surq66.png",
+      "width": 0,
+      "height": 0,
+      "name": "åå",
+      "title": "åå",
+      "description": "",
+      "create_time": "2026-06-07T16:35:38.093Z",
+      "id": 1780850138093.0603
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1780850138012-qvwlv0.png",
+      "original_url": "/uploads/1780850138012-qvwlv0.png",
+      "width": 0,
+      "height": 0,
+      "name": "å±ä¼è±",
+      "title": "å±ä¼è±",
+      "description": "",
+      "create_time": "2026-06-07T16:35:38.093Z",
+      "id": 1780850138093.5776
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1781450437127-j7k7p7.jpg",
+      "original_url": "/uploads/1781450437127-j7k7p7.jpg",
+      "width": 0,
+      "height": 0,
+      "name": "59fb0d8c8a45e4832401c16189b1b319",
+      "title": "59fb0d8c8a45e4832401c16189b1b319",
+      "description": "",
+      "create_time": "2026-06-14T15:20:37.260Z",
+      "id": 1781450437260.783
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1781450437130-ok5pgt.jpg",
+      "original_url": "/uploads/1781450437130-ok5pgt.jpg",
+      "width": 0,
+      "height": 0,
+      "name": "b6b8f43ffabc4ec7815752c6abb84108",
+      "title": "b6b8f43ffabc4ec7815752c6abb84108",
+      "description": "",
+      "create_time": "2026-06-14T15:20:37.260Z",
+      "id": 1781450437260.4739
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1781450437132-7raogw.jpg",
+      "original_url": "/uploads/1781450437132-7raogw.jpg",
+      "width": 0,
+      "height": 0,
+      "name": "c5c30e90610bd128fc40bafbc8f9010b",
+      "title": "c5c30e90610bd128fc40bafbc8f9010b",
+      "description": "",
+      "create_time": "2026-06-14T15:20:37.260Z",
+      "id": 1781450437260.686
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1781450437138-dikxg0.png",
+      "original_url": "/uploads/1781450437138-dikxg0.png",
+      "width": 0,
+      "height": 0,
+      "name": "屏幕截图 2026-03-26 210822(1)",
+      "title": "屏幕截图 2026-03-26 210822(1)",
+      "description": "",
+      "create_time": "2026-06-14T15:20:37.260Z",
+      "id": 1781450437260.8652
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1781450437181-h9usti.png",
+      "original_url": "/uploads/1781450437181-h9usti.png",
+      "width": 0,
+      "height": 0,
+      "name": "屏幕截图 2026-03-26 210844(1)",
+      "title": "屏幕截图 2026-03-26 210844(1)",
+      "description": "",
+      "create_time": "2026-06-14T15:20:37.260Z",
+      "id": 1781450437260.2517
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1781450437188-1n2p5y.png",
+      "original_url": "/uploads/1781450437188-1n2p5y.png",
+      "width": 0,
+      "height": 0,
+      "name": "屏幕截图 2026-03-26 210854(1)",
+      "title": "屏幕截图 2026-03-26 210854(1)",
+      "description": "",
+      "create_time": "2026-06-14T15:20:37.260Z",
+      "id": 1781450437260.3394
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1781450437246-82u0kq.png",
+      "original_url": "/uploads/1781450437246-82u0kq.png",
+      "width": 0,
+      "height": 0,
+      "name": "屏幕截图 2026-03-26 210903(1)",
+      "title": "屏幕截图 2026-03-26 210903(1)",
+      "description": "",
+      "create_time": "2026-06-14T15:20:37.260Z",
+      "id": 1781450437260.8235
+    },
+    {
+      "album_id": 1780850128002,
+      "url": "/uploads/1781450437256-5sz9oy.png",
+      "original_url": "/uploads/1781450437256-5sz9oy.png",
+      "width": 0,
+      "height": 0,
+      "name": "屏幕截图 2026-03-26 210916(1)",
+      "title": "屏幕截图 2026-03-26 210916(1)",
+      "description": "",
+      "create_time": "2026-06-14T15:20:37.260Z",
+      "id": 1781450437260.5615
+    }
+  ]
+}

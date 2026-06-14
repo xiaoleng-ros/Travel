@@ -1,0 +1,23 @@
+const express = require('express')
+const cors = require('cors')
+const path = require('path')
+const authRoutes = require('./routes/auth')
+const albumRoutes = require('./routes/albums')
+const photoRoutes = require('./routes/photos')
+const publicRoutes = require('./routes/public')
+
+const app = express()
+app.use(cors())
+app.use(express.json())
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
+app.use('/api', publicRoutes)
+app.use('/api/admin', authRoutes)
+app.use('/api/admin/albums', albumRoutes)
+app.use('/api/admin', photoRoutes)
+
+app.use((err, req, res, next) => {
+  console.error('ERROR:', err.stack)
+  res.status(500).json({ code: 500, message: err.message })
+})
+
+app.listen(3001, () => console.log('Test server on 3001'))
