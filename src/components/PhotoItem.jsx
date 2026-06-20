@@ -100,7 +100,7 @@ export default function PhotoItem({ photo, index, hoveredId, onHoverStart, onHov
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: isHovered ? 0 : 10, opacity: isHovered ? 1 : 0 }}
               transition={{ duration: 0.3, delay: 0.15 }}
-              className="text-white font-medium text-lg mb-1.5 break-all w-[95%] line-clamp-1 font-serif-display"
+              className="text-white font-medium text-lg mb-1.5 break-all w-[95%] line-clamp-1 font-sans-body"
             >
               {photo.title}
             </motion.h3>

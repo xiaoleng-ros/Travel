@@ -3,29 +3,31 @@ import axios from 'axios'
 const api = axios.create({
   baseURL: '/api',
   timeout: 15000,
-})
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('admin_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
+  withCredentials: true,
 })
 
 api.interceptors.response.use(
   (res) => res.data,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('admin_token')
+      localStorage.removeItem('admin_user')
       window.location.href = '/admin/login'
     }
     return Promise.reject(err.response?.data || { code: 500, message: '网络错误' })
   }
 )
 
+// 校验当前会话是否有效
+export async function checkAdminSession() {
+  return api.get('/admin/me')
+}
+
 export async function adminLogin(username, password) {
   return api.post('/admin/login', { username, password })
+}
+
+export async function adminLogout() {
+  return api.post('/admin/logout')
 }
 
 export async function getAdminAlbums() {
@@ -68,6 +70,23 @@ export async function deletePhoto(id) {
 
 export async function getRecentPhotos(limit = 12) {
   return api.get('/admin/photos/recent', { params: { limit } })
+}
+
+// 对象存储配置
+export async function getStorageSettings() {
+  return api.get('/admin/storage')
+}
+
+export async function getStorageProviderSchema() {
+  return api.get('/admin/storage/providers')
+}
+
+export async function updateStorageSettings(data) {
+  return api.put('/admin/storage', data)
+}
+
+export async function testStorageProvider(provider, config) {
+  return api.post('/admin/storage/test', { provider, config })
 }
 
 export async function getAlbumList(params) {

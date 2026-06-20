@@ -7,6 +7,8 @@ import AdminLayout from './admin/AdminLayout'
 import AdminDashboard from './admin/AdminDashboard'
 import AlbumManage from './admin/AlbumManage'
 import PhotoManage from './admin/PhotoManage'
+import StorageSettings from './admin/StorageSettings'
+import RequireAuth from './admin/RequireAuth'
 
 export default function App() {
   return (
@@ -17,10 +19,11 @@ export default function App() {
           <Route path="/photo/:id" element={<PhotoDetailPage />} />
 
           <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin" element={<RequireAuth><AdminLayout /></RequireAuth>}>
             <Route index element={<AdminDashboard />} />
             <Route path="albums" element={<AlbumManage />} />
             <Route path="albums/:id" element={<PhotoManage />} />
+            <Route path="storage" element={<StorageSettings />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -33,14 +33,13 @@ export default function AdminLogin() {
     try {
       const res = await adminLogin(username, password)
       if (res.code === 200) {
-        localStorage.setItem('admin_token', res.data.token)
         localStorage.setItem('admin_user', JSON.stringify(res.data.user))
         navigate('/admin')
       } else {
         setError(res.message || '登录失败')
       }
-    } catch {
-      setError('网络错误，请检查连接')
+    } catch (err) {
+      setError(err?.message || '网络错误，请检查连接')
     } finally {
       setLoading(false)
     }
@@ -54,25 +53,27 @@ export default function AdminLogin() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="relative w-full max-w-[380px] px-5"
+        className="relative w-full max-w-[420px] px-5"
       >
         <form
           onSubmit={handleSubmit}
           className="rounded-2xl bg-white/80 backdrop-blur-xl border border-[#e7e2d8]/60 shadow-[0_8px_32px_rgba(0,0,0,0.06)]"
         >
-          <div className="px-7 pt-10 pb-7 space-y-7">
+          <div className="px-8 pt-10 pb-8 space-y-6">
             <div className="text-center space-y-4">
               <motion.div
                 initial={{ scale: 0.8 }}
                 animate={{ scale: 1 }}
                 transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                className="mx-auto w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fef3c7] to-[#fde68a] flex items-center justify-center shadow-[0_2px_8px_rgba(217,119,6,0.15)]"
+                className="mx-auto w-[72px] h-[72px] aspect-square overflow-hidden rounded-2xl shadow-[0_2px_8px_rgba(217,119,6,0.15)]"
+                style={{ width: '72px', height: '72px' }}
               >
-                <svg viewBox="0 0 24 24" className="w-6 h-6 text-[#d97706]" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="3" y="3" width="18" height="18" rx="3" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
+                <img
+                  src="/logo.png"
+                  alt="人间快照"
+                  className="w-full h-full object-cover"
+                  style={{ width: '72px', height: '72px' }}
+                />
               </motion.div>
               <div className="space-y-1">
                 <h1 className="text-[20px] font-semibold tracking-tight text-[#292524]">
@@ -126,7 +127,7 @@ export default function AdminLogin() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="admin123"
+                    placeholder="包含大小写字母、数字和特殊字符"
                     autoComplete="current-password"
                     className="w-full h-10 bg-[#faf8f5]/80 border border-[#e7e2d8] rounded-lg px-3.5 pr-10 text-[14px] text-[#292524] placeholder-[#c4bdb2] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#d97706]/30 focus-visible:border-[#d97706]/50 focus-visible:bg-white"
                   />
@@ -165,7 +166,7 @@ export default function AdminLogin() {
             </button>
           </div>
 
-          <div className="px-7 py-3.5 border-t border-[#f0ece4]/60">
+          <div className="px-8 py-3.5 border-t border-[#f0ece4]/60">
             <p className="text-center text-[11px] text-[#c4bdb2] tracking-[0.05em]">
               记录每一次出发 · 珍藏每一段回忆
             </p>

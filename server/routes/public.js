@@ -1,6 +1,7 @@
 const express = require('express')
 const path = require('path')
 const db = require('../db')
+const { resolveSafePath } = require('../utils/security')
 
 const router = express.Router()
 
@@ -18,25 +19,27 @@ function fixEncoding(str) {
 
 // GET /api/album/public/list
 router.get('/album/public/list', (req, res) => {
-  const { page = 1, limit = 100, scene = 'cover' } = req.query
+  const page = Math.max(Number(req.query.page) || 1, 1)
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 100)
   const albums = db.getAlbums().map(a => ({
     ...a,
     photo_count: db.getPhotosByAlbum(a.id).length,
   }))
 
-  const start = (Number(page) - 1) * Number(limit)
-  const result = albums.slice(start, start + Number(limit))
+  const start = (page - 1) * limit
+  const result = albums.slice(start, start + limit)
 
   res.json({
     code: 200,
     message: 'success',
-    data: { result, total: albums.length, page: Number(page), limit: Number(limit) },
+    data: { result, total: albums.length, page, limit },
   })
 })
 
 // GET /api/album/public/:id/photos
 router.get('/album/public/:id/photos', (req, res) => {
-  const { page = 1, limit = 40, scene = 'grid' } = req.query
+  const page = Math.max(Number(req.query.page) || 1, 1)
+  const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100)
   const albumId = Number(req.params.id)
 
   let photos
@@ -47,8 +50,8 @@ router.get('/album/public/:id/photos', (req, res) => {
     photos = db.getPhotosByAlbum(albumId)
   }
 
-  const start = (Number(page) - 1) * Number(limit)
-  const result = photos.slice(start, start + Number(limit)).map(p => ({
+  const start = (page - 1) * limit
+  const result = photos.slice(start, start + limit).map(p => ({
     ...p,
     title: fixEncoding(p.title),
     name: fixEncoding(p.name),
@@ -60,13 +63,22 @@ router.get('/album/public/:id/photos', (req, res) => {
   res.json({
     code: 200,
     message: 'success',
-    data: { result, total: photos.length, page: Number(page), limit: Number(limit) },
+    data: { result, total: photos.length, page, limit },
   })
 })
 
 // GET /uploads/:filename
 router.get('/uploads/:filename', (req, res) => {
-  const filePath = path.join(__dirname, '..', 'uploads', req.params.filename)
+  const UPLOAD_DIR = path.resolve(__dirname, '..', 'uploads')
+  const filePath = resolveSafePath(UPLOAD_DIR, req.params.filename)
+
+  if (!filePath || !require('fs').existsSync(filePath)) {
+    return res.status(404).json({ code: 404, message: '文件不存在' })
+  }
+
+  // 为静态资源添加缓存与安全响应头
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
   res.sendFile(filePath)
 })
 

@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { GridFour, ImageSquare, SignOut } from '@phosphor-icons/react'
+import { GridFour, ImageSquare, Cloud, SignOut } from '@phosphor-icons/react'
+import { adminLogout } from '../api/real'
 
 const navItems = [
   { path: '/admin', label: '概览', icon: GridFour },
   { path: '/admin/albums', label: '相册管理', icon: ImageSquare },
+  { path: '/admin/storage', label: '对象存储', icon: Cloud },
 ]
 
 function NavLink({ item, location }) {
@@ -41,8 +43,12 @@ export default function AdminLayout() {
     try { return JSON.parse(localStorage.getItem('admin_user')) } catch { return null }
   })
 
-  const handleLogout = () => {
-    localStorage.removeItem('admin_token')
+  const handleLogout = async () => {
+    try {
+      await adminLogout()
+    } catch {
+      // 即使后端请求失败，也清除本地登录状态
+    }
     localStorage.removeItem('admin_user')
     navigate('/admin/login')
   }
@@ -51,12 +57,12 @@ export default function AdminLayout() {
     <div className="h-[100dvh] bg-[#f7f5f1] flex overflow-hidden">
       <aside className="w-64 h-full bg-white/90 backdrop-blur-sm border-r border-[#e7e2d8] flex flex-col shrink-0">
         <div className="px-6 h-16 flex items-center gap-3 border-b border-[#e7e2d8]">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#fef3c7] to-[#fde68a] flex items-center justify-center shadow-[0_2px_6px_rgba(217,119,6,0.12)]">
-            <svg viewBox="0 0 24 24" className="w-5 h-5 text-[#d97706]" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="3" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
+          <div className="w-12 h-12 rounded-xl overflow-hidden shadow-[0_2px_6px_rgba(217,119,6,0.12)]">
+            <img
+              src="/logo.png"
+              alt="人间快照"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
             <h2 className="text-[15px] font-normal text-[#292524]" style={{ fontFamily: "'Instrument Serif', serif" }}>管理后台</h2>
@@ -72,16 +78,11 @@ export default function AdminLayout() {
 
         <div className="p-4 border-t border-[#e7e2d8]">
           <div className="rounded-xl bg-[#f7f5f1] p-4 space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#fef3c7] to-[#fde68a] flex items-center justify-center text-[14px] font-semibold text-[#d97706] shrink-0">
-                {(user?.nickname || '管').charAt(0)}
+            <div className="min-w-0">
+              <div className="text-[14px] font-semibold text-[#292524] truncate">
+                {user?.nickname || '管理员'}
               </div>
-              <div className="min-w-0">
-                <div className="text-[14px] font-semibold text-[#292524] truncate">
-                  {user?.nickname || '管理员'}
-                </div>
-                <div className="text-[12px] text-[#a8a098] mt-0.5">管理员</div>
-              </div>
+              <div className="text-[12px] text-[#a8a098] mt-0.5">管理员</div>
             </div>
             <button
               onClick={handleLogout}
