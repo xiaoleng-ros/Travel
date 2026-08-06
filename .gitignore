@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+
+# 运行时数据与用户上传文件（含敏感信息，禁止入库）
+server/data/
+server/uploads/
