@@ -9,3 +9,6 @@ Thumbs.db
 # 运行时数据与用户上传文件（含敏感信息，禁止入库）
 server/data/
 server/uploads/
+
+# 本地 IDE 工作目录（调试截图与记忆等，不入库）
+.workbuddy/

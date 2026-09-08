@@ -45,4 +45,19 @@ async function saveFile(buffer, filename) {
   return { provider, url, key }
 }
 
-module.exports = { saveFile, generateObjectKey, UPLOAD_DIR }
+/**
+ * 删除指定提供者下的云端对象
+ * @param {string} provider - 存储提供者标识
+ * @param {string} key - 对象 key
+ */
+async function deleteFile(provider, key) {
+  if (!provider || provider === 'local' || !key) return
+  const settings = db.getStorageSettings()
+  const rawConfig = settings.providers?.[provider]
+  if (!rawConfig) return
+  const config = db.decryptStorageConfig(provider, rawConfig)
+  const adapter = createAdapter(provider, config)
+  await adapter.delete(key)
+}
+
+module.exports = { saveFile, deleteFile, generateObjectKey, UPLOAD_DIR }

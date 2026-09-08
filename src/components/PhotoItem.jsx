@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from 'motion/react'
 import { useTheme } from '../context/ThemeContext'
+import { getDisplayTitle } from '../utils/title'
 
 export default function PhotoItem({ photo, index, hoveredId, onHoverStart, onHoverEnd, onClick, onPhotoLoaded }) {
   const { theme } = useTheme()
@@ -23,13 +24,16 @@ export default function PhotoItem({ photo, index, hoveredId, onHoverStart, onHov
           }
         })
       },
-      { rootMargin: '50px' }
+      // 预加载距离：提前约 1.2 个屏幕开始下载，避免滚动时看到转圈
+      { rootMargin: '1200px' }
     )
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
 
   const isHovered = hoveredId === photo.id
+  // 无意义 hash / 空标题返回 null，此时隐藏标题文字
+  const displayTitle = getDisplayTitle(photo.title)
 
   const handleClick = useCallback(() => onClick(photo), [onClick, photo])
 
@@ -53,8 +57,8 @@ export default function PhotoItem({ photo, index, hoveredId, onHoverStart, onHov
       }}
     >
       {!loaded && !error && (
-        <div className={`w-full h-full animate-pulse flex items-center justify-center ${isDark ? 'bg-[#2a2a2a]' : 'bg-[#f0eeeb]'}`}>
-          <div className={`w-8 h-8 border-2 rounded-full animate-spin ${isDark ? 'border-white/10 border-t-white/60' : 'border-[#1a1a1a]/10 border-t-[#1a1a1a]'}`} />
+        <div className={`w-full h-full overflow-hidden ${isDark ? 'bg-[#2b2b2b]' : 'bg-[#ece9e4]'}`}>
+          <div className={`w-full h-full animate-pulse ${isDark ? 'bg-[#2b2b2b]' : 'bg-[#ece9e4]'}`} />
         </div>
       )}
 
@@ -67,9 +71,8 @@ export default function PhotoItem({ photo, index, hoveredId, onHoverStart, onHov
       {!error && (
         <img
           ref={ref}
-          src={shouldLoad ? photo.url : undefined}
-          alt={photo.title}
-          loading="lazy"
+          src={shouldLoad ? (photo.thumb || photo.url) : undefined}
+          alt={photo.title || '照片'}
           decoding="async"
           onLoad={(e) => {
             setLoaded(true)
@@ -79,41 +82,38 @@ export default function PhotoItem({ photo, index, hoveredId, onHoverStart, onHov
             }
           }}
           onError={() => setError(true)}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          className={`w-full h-full object-cover transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
         />
       )}
 
       {loaded && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: isHovered ? 1 : 0 }}
-          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0"
-        >
+        <>
           <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: isHovered ? 0 : 20, opacity: isHovered ? 1 : 0 }}
-            transition={{ duration: 0.4, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute bottom-0 left-0 right-0 p-4"
-          >
-            <motion.h3
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: isHovered ? 0 : 10, opacity: isHovered ? 1 : 0 }}
-              transition={{ duration: 0.3, delay: 0.15 }}
-              className="text-white font-medium text-lg mb-1.5 break-all w-[95%] line-clamp-1 font-sans-body"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: isHovered ? 1 : 0 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className={`absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 ${
+              displayTitle ? '' : 'opacity-0 group-hover:opacity-100'
+            }`}
+          />
+          {displayTitle && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: isHovered ? 1 : 0 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute bottom-0 left-0 right-0 p-4"
             >
-              {photo.title}
-            </motion.h3>
-            <motion.p
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: isHovered ? 0 : 10, opacity: isHovered ? 1 : 0 }}
-              transition={{ duration: 0.3, delay: 0.2 }}
-              className="text-white/70 text-xs font-sans-body"
-            >
-              {photo.width} × {photo.height}
-            </motion.p>
-          </motion.div>
-        </motion.div>
+              <motion.h3
+                initial={{ y: 12, opacity: 0 }}
+                animate={{ y: isHovered ? 0 : 12, opacity: isHovered ? 1 : 0 }}
+                transition={{ duration: 0.35, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+                className="text-white font-medium text-lg break-all w-[92%] line-clamp-2 font-sans-body drop-shadow-sm"
+              >
+                {displayTitle}
+              </motion.h3>
+            </motion.div>
+          )}
+        </>
       )}
     </motion.div>
   )

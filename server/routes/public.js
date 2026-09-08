@@ -2,28 +2,18 @@ const express = require('express')
 const path = require('path')
 const db = require('../db')
 const { resolveSafePath } = require('../utils/security')
+const { fixEncoding } = require('../utils/text')
 
 const router = express.Router()
-
-// 修复文件名编码：将误读的 Latin-1 字符串还原为正确的 UTF-8
-function fixEncoding(str) {
-  try {
-    const buf = Buffer.from(str, 'latin1')
-    const decoded = buf.toString('utf-8')
-    if (/[\u4e00-\u9fff]/.test(decoded)) {
-      return decoded
-    }
-  } catch {}
-  return str
-}
 
 // GET /api/album/public/list
 router.get('/album/public/list', (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1)
   const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 100)
+  const countMap = db.getPhotoCountMap()
   const albums = db.getAlbums().map(a => ({
     ...a,
-    photo_count: db.getPhotosByAlbum(a.id).length,
+    photo_count: countMap.get(a.id) || 0,
   }))
 
   const start = (page - 1) * limit
@@ -44,11 +34,14 @@ router.get('/album/public/:id/photos', (req, res) => {
 
   let photos
   if (albumId === 0) {
-    // "全部" album - return all photos
-    photos = db.getAllPhotos()
+    // "全部"相册：返回未删除的照片
+    photos = db.getPhotos()
   } else {
     photos = db.getPhotosByAlbum(albumId)
   }
+
+  // 与管理端一致的展示顺序：手动排过序的按 sort_order，否则新照片在前
+  photos = db.sortPhotosForDisplay(photos)
 
   const start = (page - 1) * limit
   const result = photos.slice(start, start + limit).map(p => ({

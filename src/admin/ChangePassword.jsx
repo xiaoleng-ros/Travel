@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { motion } from 'motion/react'
 import { Key, Eye, EyeSlash, CheckCircle, LockKey } from '@phosphor-icons/react'
@@ -37,6 +37,7 @@ export default function ChangePassword() {
       if (res.code === 200) {
         // 清除本地登录状态，跳转登录页重新登录
         localStorage.removeItem('admin_user')
+        sessionStorage.removeItem('admin_logged_in')
         setSuccess(true)
         setTimeout(() => navigate('/admin/login'), 1200)
       } else {

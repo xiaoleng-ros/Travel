@@ -1,12 +1,13 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router'
 import { motion } from 'motion/react'
-import { GridFour, ImageSquare, Cloud, SignOut, Key } from '@phosphor-icons/react'
+import { GridFour, ImageSquare, Cloud, SignOut, Key, Trash } from '@phosphor-icons/react'
 import { adminLogout } from '../api/real'
 
 const navItems = [
   { path: '/admin', label: '概览', icon: GridFour },
   { path: '/admin/albums', label: '相册管理', icon: ImageSquare },
+  { path: '/admin/trash', label: '回收站', icon: Trash },
   { path: '/admin/storage', label: '对象存储', icon: Cloud },
   { path: '/admin/change-password', label: '修改密码', icon: Key },
 ]
@@ -51,6 +52,7 @@ export default function AdminLayout() {
       // 即使后端请求失败，也清除本地登录状态
     }
     localStorage.removeItem('admin_user')
+    sessionStorage.removeItem('admin_logged_in')
     navigate('/admin/login')
   }
 

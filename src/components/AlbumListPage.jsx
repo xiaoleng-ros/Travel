@@ -1,13 +1,16 @@
-﻿import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router'
-import { getAlbumPhotos } from '../api/mock'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { getAlbumPhotos } from '../api/real'
 import PhotoGrid from './PhotoGrid'
-import Lightbox from './Lightbox'
 import ThemeToggle from './ThemeToggle'
 import { useTheme } from '../context/ThemeContext'
-import { motion } from 'framer-motion'
+import { motion } from 'motion/react'
+
+// 灯箱只在点开时才加载，减小首屏主包体积
+const Lightbox = lazy(() => import('./Lightbox'))
 
 const PAGE_SIZE = 40
+// 前台统一展示全部照片（albumId=0 表示「全部」）
+const ALL_PHOTOS_ALBUM = 0
 
 export default function AlbumListPage() {
   const { theme } = useTheme()
@@ -23,7 +26,6 @@ export default function AlbumListPage() {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [imgLoading, setImgLoading] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState('')
-  const navigate = useNavigate()
   const loadingRef = useRef(false)
 
   const hasMore = photos.length < total
@@ -31,8 +33,9 @@ export default function AlbumListPage() {
   useEffect(() => {
     const fetch = async () => {
       setLoading(true)
+      loadingRef.current = false
       try {
-        const res = await getAlbumPhotos(0, { page: 1, limit: PAGE_SIZE, scene: 'grid' })
+        const res = await getAlbumPhotos(ALL_PHOTOS_ALBUM, { page: 1, limit: PAGE_SIZE, scene: 'grid' })
         if (res.code === 200 && res.data) {
           setPhotos(res.data.result || [])
           setTotal(res.data.total || 0)
@@ -54,7 +57,7 @@ export default function AlbumListPage() {
     setLoadingMore(true)
     const nextPage = page + 1
     try {
-      const res = await getAlbumPhotos(0, { page: nextPage, limit: PAGE_SIZE, scene: 'grid' })
+      const res = await getAlbumPhotos(ALL_PHOTOS_ALBUM, { page: nextPage, limit: PAGE_SIZE, scene: 'grid' })
       if (res.code === 200 && res.data) {
         setPhotos((prev) => [...prev, ...(res.data.result || [])])
         setTotal(res.data.total || 0)
@@ -129,49 +132,66 @@ export default function AlbumListPage() {
       )}
 
       {/* Hero */}
-      <header className="pt-14 pb-8 px-6 md:px-12 lg:px-20">
+      <header className="flex-none px-6 md:px-12 lg:px-20 pt-14 pb-7">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <p className={`text-[11px] uppercase tracking-[0.25em] mb-3 font-sans-body font-medium ${isDark ? 'text-[#6a6560]' : 'text-[#a89f91]'}`}>
-            Photo Memoir
-          </p>
-          <h1 className={`text-[clamp(2.2rem,5vw,3.8rem)] leading-[1.05] font-light mb-3 ${isDark ? 'text-[#f5f5f5]' : 'text-[#1a1a1a]'}`}>
+          <div className={`flex items-center gap-3 mb-4 ${isDark ? 'text-[#6a6560]' : 'text-[#a89f91]'}`}>
+            <span className={`h-px w-8 ${isDark ? 'bg-[#44403c]' : 'bg-[#d9d2c6]'}`} />
+            <p className="text-[11px] uppercase tracking-[0.3em] font-sans-body font-medium">Photo Memoir</p>
+          </div>
+          <h1 className={`text-[clamp(2.4rem,5vw,3.8rem)] leading-[1.05] font-light mb-3 ${isDark ? 'text-[#f5f5f5]' : 'text-[#1a1a1a]'}`}>
             心之所向
           </h1>
           <p className={`text-base font-light max-w-md leading-relaxed ${isDark ? 'text-[#8a8580]' : 'text-[#7a7568]'}`}>
             每一张照片，都是一段不愿遗忘的时光
           </p>
+          {!loading && total > 0 && (
+            <p className={`mt-4 flex items-center gap-2 text-[12px] font-sans-body ${isDark ? 'text-[#6a6560]' : 'text-[#a89f91]'}`}>
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${isDark ? 'bg-[#57534e]' : 'bg-[#d9d2c6]'}`} />
+              共收录 {total} 张照片，留驻此刻
+            </p>
+          )}
         </motion.div>
+        <motion.div
+          initial={{ opacity: 0, scaleX: 0 }}
+          animate={{ opacity: 1, scaleX: 1 }}
+          transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          className={`mt-6 h-px origin-left ${isDark ? 'bg-[#2a2a2a]' : 'bg-[#ece7dd]'}`}
+        />
       </header>
 
-      {/* Photo Masonry Grid */}
-      {photos.length > 0 ? (
-        <PhotoGrid
-          photos={photos}
-          onPhotoClick={openLightbox}
-          onReachEnd={loadMore}
-          hasMore={hasMore}
-          isLoadingMore={loadingMore}
-        />
-      ) : !loading ? (
-        <div className="min-h-[50vh] flex items-center justify-center">
-          <p className={`text-lg font-sans-body ${isDark ? 'text-[#6a6560]' : 'text-[#9a9588]'}`}>暂无照片</p>
-        </div>
-      ) : null}
+      {/* Photo Masonry Grid：跟随文档流，照片左右留白由 PhotoGrid 内部控制 */}
+      <main className="pb-16">
+        {photos.length > 0 ? (
+          <PhotoGrid
+            photos={photos}
+            onPhotoClick={openLightbox}
+            onReachEnd={loadMore}
+            hasMore={hasMore}
+            isLoadingMore={loadingMore}
+          />
+        ) : !loading ? (
+          <div className="py-24 flex items-center justify-center">
+            <p className={`text-lg font-sans-body ${isDark ? 'text-[#6a6560]' : 'text-[#9a9588]'}`}>暂无照片</p>
+          </div>
+        ) : null}
+      </main>
 
       {lightboxOpen && lightboxPhoto && (
-        <Lightbox
-          photo={{ ...lightboxPhoto, url: lightboxSrc }}
-          currentIndex={lightboxIndex}
-          totalCount={total || photos.length}
-          onClose={closeLightbox}
-          onPrev={goPrev}
-          onNext={goNext}
-          isLoading={imgLoading}
-        />
+        <Suspense fallback={null}>
+          <Lightbox
+            photo={{ ...lightboxPhoto, url: lightboxSrc }}
+            currentIndex={lightboxIndex}
+            totalCount={total || photos.length}
+            onClose={closeLightbox}
+            onPrev={goPrev}
+            onNext={goNext}
+            isLoading={imgLoading}
+          />
+        </Suspense>
       )}
     </div>
   )

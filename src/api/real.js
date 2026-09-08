@@ -73,6 +73,34 @@ export async function deletePhoto(id) {
   return api.delete(`/admin/photos/${id}`)
 }
 
+// 批量软删除（多张照片移入回收站）
+export async function deletePhotos(ids) {
+  return api.post(`/admin/photos/batch-delete`, { ids })
+}
+
+// 修改照片标题 / 描述
+export async function updatePhoto(id, data) {
+  return api.patch(`/admin/photos/${id}`, data)
+}
+
+// 重排相册内照片顺序，ids 为排好序的照片 id 数组
+export async function reorderPhotos(albumId, ids) {
+  return api.patch(`/admin/albums/${albumId}/photos/reorder`, { ids })
+}
+
+// 回收站
+export async function getDeletedPhotos() {
+  return api.get('/admin/photos/trash')
+}
+
+export async function restorePhoto(id) {
+  return api.post(`/admin/photos/${id}/restore`)
+}
+
+export async function purgePhoto(id) {
+  return api.delete(`/admin/photos/${id}/purge`)
+}
+
 export async function getRecentPhotos(limit = 12) {
   return api.get('/admin/photos/recent', { params: { limit } })
 }
@@ -94,10 +122,11 @@ export async function testStorageProvider(provider, config) {
   return api.post('/admin/storage/test', { provider, config })
 }
 
-export async function getAlbumList(params) {
-  return api.get('/album/public/list', { params })
-}
-
 export async function getAlbumPhotos(albumId, params) {
   return api.get(`/album/public/${albumId}/photos`, { params })
+}
+
+// 公开相册列表
+export async function getPublicAlbums(params) {
+  return api.get('/album/public/list', { params })
 }

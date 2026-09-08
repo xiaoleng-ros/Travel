@@ -43,6 +43,18 @@ class OssAdapter {
       return false
     }
   }
+
+  async delete(key) {
+    const OSS = require('ali-oss')
+    const client = new OSS({
+      region: this.config.region,
+      accessKeyId: this.config.accessKeyId,
+      accessKeySecret: this.config.accessKeySecret,
+      bucket: this.config.bucket,
+      secure: true,
+    })
+    await client.delete(key)
+  }
 }
 
 /**
@@ -103,6 +115,27 @@ class CosAdapter {
       return false
     }
   }
+
+  async delete(key) {
+    const COS = require('cos-nodejs-sdk-v5')
+    const cos = new COS({
+      SecretId: this.config.secretId,
+      SecretKey: this.config.secretKey,
+    })
+    return new Promise((resolve, reject) => {
+      cos.deleteObject(
+        {
+          Bucket: this.config.bucket,
+          Region: this.config.region,
+          Key: key,
+        },
+        (err, data) => {
+          if (err) return reject(err)
+          resolve(data)
+        }
+      )
+    })
+  }
 }
 
 /**
@@ -156,6 +189,22 @@ class KodoAdapter {
     } catch (err) {
       return false
     }
+  }
+
+  async delete(key) {
+    const qiniu = require('qiniu')
+    const mac = new qiniu.auth.digest.Mac(this.config.accessKey, this.config.secretKey)
+    const bucketManager = new qiniu.rs.BucketManager(mac)
+    return new Promise((resolve, reject) => {
+      bucketManager.delete(this.config.bucket, key, (err, respBody, respInfo) => {
+        if (err) return reject(err)
+        // 612 表示文件不存在，视为删除成功（幂等）
+        if (respInfo.statusCode !== 200 && respInfo.statusCode !== 612) {
+          return reject(new Error(respBody?.error || '删除失败'))
+        }
+        resolve(respBody)
+      })
+    })
   }
 }
 

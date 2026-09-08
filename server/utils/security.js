@@ -61,7 +61,9 @@ function resolveSafePath(baseDir, filename) {
  * @returns {boolean} 是否删除成功
  */
 function deleteSafeFile(baseDir, filename) {
-  const filePath = resolveSafePath(baseDir, filename)
+  // 调用方可能传入完整 URL（如 /uploads/xxx.png），先归一化为纯文件名再解析
+  const safeName = typeof filename === 'string' ? path.basename(filename) : filename
+  const filePath = resolveSafePath(baseDir, safeName)
   if (!filePath || !fs.existsSync(filePath)) return false
 
   try {

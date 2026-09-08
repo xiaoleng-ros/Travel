@@ -15,27 +15,14 @@ router.get('/me', authMiddleware, (req, res) => {
   })
 })
 
-const passwordValidationRules = [
-  body('username')
-    .trim()
-    .isLength({ min: 3, max: 30 })
-    .withMessage('用户名长度为3-30个字符')
-    .matches(/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/)
-    .withMessage('用户名只能包含字母、数字、下划线和中文字符'),
-  body('password')
-    .isLength({ min: 8, max: 50 })
-    .withMessage('密码长度不能少于8个字符')
-    .matches(/[A-Z]/)
-    .withMessage('密码必须包含至少一个大写字母')
-    .matches(/[a-z]/)
-    .withMessage('密码必须包含至少一个小写字母')
-    .matches(/[0-9]/)
-    .withMessage('密码必须包含至少一个数字')
-    .matches(/[^a-zA-Z0-9]/)
-    .withMessage('密码必须包含至少一个特殊字符'),
+// 登录仅校验非空；密码强度规则只应用于「设置/修改密码」，
+// 避免历史弱密码或随机生成的初始密码因不满足强度要求而无法登录
+const loginValidationRules = [
+  body('username').trim().notEmpty().withMessage('请输入用户名'),
+  body('password').notEmpty().withMessage('请输入密码'),
 ]
 
-router.post('/login', loginLimiter, passwordValidationRules, (req, res) => {
+router.post('/login', loginLimiter, loginValidationRules, (req, res) => {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
     return res.status(400).json({ code: 400, message: errors.array()[0].msg })

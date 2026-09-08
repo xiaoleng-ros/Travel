@@ -132,7 +132,7 @@ router.put('/', authMiddleware, saveValidation, async (req, res) => {
     res.json({ code: 200, message: '保存成功', data: maskStorageSettings(settings) })
   } catch (err) {
     console.error('保存存储配置失败:', err.message)
-    res.status(500).json({ code: 500, message: '保存失败：' + err.message })
+    res.status(500).json({ code: 500, message: '保存失败，请检查配置' })
   }
 })
 
@@ -157,7 +157,7 @@ router.post('/test', authMiddleware, testValidation, async (req, res) => {
     }
   } catch (err) {
     console.error('存储连通性测试异常:', err.message)
-    res.status(400).json({ code: 400, message: '测试失败：' + err.message })
+    res.status(400).json({ code: 400, message: '测试失败，请检查配置' })
   }
 })
 

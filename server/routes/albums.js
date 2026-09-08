@@ -2,7 +2,8 @@ const express = require('express')
 const { body, param, validationResult } = require('express-validator')
 const db = require('../db')
 const { authMiddleware } = require('../middleware/auth')
-const { sanitizeText } = require('../utils/security')
+const { sanitizeText, deleteSafeFile } = require('../utils/security')
+const { deleteFile } = require('../storage')
 
 const router = express.Router()
 
@@ -40,9 +41,10 @@ const albumBodyValidation = [
 
 // GET /api/admin/albums
 router.get('/', authMiddleware, (req, res) => {
+  const countMap = db.getPhotoCountMap()
   const albums = db.getAlbums().map(a => ({
     ...a,
-    photo_count: db.getPhotosByAlbum(a.id).length,
+    photo_count: countMap.get(a.id) || 0,
   }))
   res.json({ code: 200, data: albums })
 })
@@ -83,12 +85,26 @@ router.delete('/:id', authMiddleware, albumIdValidation, async (req, res) => {
   const deletedPhotos = await db.deleteAlbum(Number(req.params.id))
   if (!deletedPhotos) return res.status(404).json({ code: 404, message: '相册不存在' })
 
-  // 同步删除相册下所有照片的物理文件
+  // 同步删除相册下所有照片的物理文件 / 云端对象（含缩略图）
+  const UPLOAD_DIR = require('path').join(__dirname, '..', 'uploads')
   for (const photo of deletedPhotos) {
     try {
-      const { deleteSafeFile } = require('../utils/security')
-      deleteSafeFile(require('path').join(__dirname, '..', 'uploads'), photo.url)
-    } catch {}
+      if (!photo.storage_provider || photo.storage_provider === 'local') {
+        deleteSafeFile(UPLOAD_DIR, photo.url)
+        deleteSafeFile(UPLOAD_DIR, photo.original_url)
+        if (photo.thumb && photo.thumb !== photo.url) {
+          deleteSafeFile(UPLOAD_DIR, photo.thumb)
+        }
+      } else {
+        await Promise.allSettled(
+          [photo.storage_key, photo.thumb_key, photo.original_key]
+            .filter(Boolean)
+            .map(key => deleteFile(photo.storage_provider, key))
+        )
+      }
+    } catch (err) {
+      console.error('删除相册物理文件失败:', err.message)
+    }
   }
 
   res.json({ code: 200, message: '删除成功' })

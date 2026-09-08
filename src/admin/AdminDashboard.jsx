@@ -1,7 +1,8 @@
-﻿import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { motion, AnimatePresence } from 'motion/react'
 import { getAdminAlbums, getRecentPhotos, uploadPhotos } from '../api/real'
+import { validateUploadFiles } from '../utils/upload'
 import {
   FolderOpen,
   ImageSquare,
@@ -47,7 +48,7 @@ function PhotoThumb({ photo, onClick }) {
       className="group relative aspect-square rounded-xl overflow-hidden bg-[#f0ece4] border border-[#e7e2d8] transition-all duration-200 hover:border-[#d4cdc0] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
     >
       <img
-        src={photo.url}
+        src={photo.thumb || photo.url}
         alt={photo.title}
         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         loading="lazy"
@@ -106,14 +107,23 @@ function UploadModal({ albums, onClose }) {
   const [uploadFiles, setUploadFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [uploadError, setUploadError] = useState('')
   const fileRef = useRef(null)
 
   const handleQuickUpload = async () => {
     if (!uploadAlbumId || uploadFiles.length === 0) return
+    const err = validateUploadFiles(uploadFiles)
+    if (err) {
+      setUploadError(err)
+      return
+    }
+    setUploadError('')
     setUploading(true)
     try {
       await uploadPhotos(Number(uploadAlbumId), uploadFiles)
       onClose(true)
+    } catch (e) {
+      setUploadError(e?.message || '上传失败，请稍后重试')
     } finally {
       setUploading(false)
     }
@@ -198,11 +208,18 @@ function UploadModal({ albums, onClose }) {
                 <div className="space-y-2">
                   <UploadSimple size={28} className="mx-auto text-[#c4bdb2]" />
                   <p className="text-[13px] text-[#787168] font-medium">拖拽照片到这里，或点击选择</p>
-                  <p className="text-[11px] text-[#a8a098]">支持 JPG / PNG / GIF / WebP</p>
+                  <p className="text-[11px] text-[#a8a098]">支持 JPG / PNG / GIF / WebP / BMP / AVIF</p>
                 </div>
               )}
             </div>
           </div>
+
+          {uploadError && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50/80 px-3.5 py-2.5" role="alert">
+              <X size={14} className="shrink-0 text-red-500" />
+              <span className="text-[13px] text-red-600">{uploadError}</span>
+            </div>
+          )}
 
           <button
             onClick={handleQuickUpload}
@@ -275,27 +292,32 @@ export default function AdminDashboard() {
   const maxPhotoCount = Math.max(...albums.map(a => a.photo_count || 0), 1)
   const sortedAlbums = [...albums].sort((a, b) => (b.photo_count || 0) - (a.photo_count || 0))
 
+  // 先按原始 ISO 时间排序，最后再格式化，避免解析本地化字符串
   const timeline = [
     ...albums.map(a => ({
       type: 'album',
+      rawTime: new Date(a.create_time).getTime(),
       title: `创建相册「${a.name}」`,
-      time: new Date(a.create_time).toLocaleString('zh-CN'),
       icon: FolderOpen,
       bgClass: 'bg-[#fef3c7]',
       iconClass: 'text-[#d97706]',
     })),
     ...recentPhotos.map(p => ({
       type: 'photo',
+      rawTime: new Date(p.create_time).getTime(),
       title: `上传照片「${p.title}」`,
-      time: new Date(p.create_time).toLocaleString('zh-CN'),
       desc: p.album_id ? `至相册 #${p.album_id}` : '',
       icon: Camera,
       bgClass: 'bg-[#e0f2fe]',
       iconClass: 'text-[#0284c7]',
     })),
   ]
-    .sort((a, b) => new Date(b.time) - new Date(a.time))
+    .sort((a, b) => b.rawTime - a.rawTime)
     .slice(0, 8)
+    .map(item => ({
+      ...item,
+      time: new Date(item.rawTime).toLocaleString('zh-CN'),
+    }))
 
   return (
     <div className="p-10 max-w-7xl mx-auto">

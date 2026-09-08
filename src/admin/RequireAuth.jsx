@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import { checkAdminSession } from '../api/real'
 
@@ -7,6 +7,12 @@ function RequireAuth({ children }) {
   const [authState, setAuthState] = useState('loading')
 
   useEffect(() => {
+    // 优先检查 sessionStorage 标记（登录刚完成时的快速路径，避免 cookie 未就绪时循环跳转）
+    if (sessionStorage.getItem('admin_logged_in') === '1') {
+      setAuthState('ok')
+      return
+    }
+
     let cancelled = false
     checkAdminSession()
       .then((res) => {

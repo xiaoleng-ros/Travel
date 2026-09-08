@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { motion } from 'motion/react'
 import { SignIn, Eye, EyeSlash } from '@phosphor-icons/react'
@@ -34,6 +34,7 @@ export default function AdminLogin() {
       const res = await adminLogin(username, password)
       if (res.code === 200) {
         localStorage.setItem('admin_user', JSON.stringify(res.data.user))
+        sessionStorage.setItem('admin_logged_in', '1')
         navigate('/admin')
       } else {
         setError(res.message || '登录失败')

@@ -1,5 +1,4 @@
 const fs = require('fs')
-const path = require('path')
 
 // 允许的图片格式及其扩展名
 const ALLOWED_FORMATS = {
@@ -32,55 +31,13 @@ function detectImageFormat(buffer) {
   return null
 }
 
-/**
- * 处理上传的图片：校验格式、剥离 EXIF、限制尺寸、转存为安全文件
- * @param {string} srcPath - 上传后的临时文件路径
- * @param {string} destDir - 目标保存目录
- * @returns {Promise<{filename: string, width: number, height: number}|null>}
- */
-async function processUploadedImage(srcPath, destDir) {
-  const sharp = require('sharp')
-
-  // 读取文件头并校验真实格式
-  const fd = fs.openSync(srcPath, 'r')
-  const header = Buffer.alloc(16)
-  fs.readSync(fd, header, 0, 16, 0)
-  fs.closeSync(fd)
-  const format = detectImageFormat(header)
-  if (!format || !ALLOWED_FORMATS[format]) {
-    return null
-  }
-
-  const outputName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ALLOWED_FORMATS[format].ext}`
-  const destPath = path.join(destDir, outputName)
-
-  // 使用 sharp 处理：限制像素、剥离元数据、压缩
-  const { width, height } = await sharp(srcPath, {
-    limitInputPixels: 64000000, // 8000 * 8000，防止超大图解压炸弹
-  })
-    .rotate() // 根据 EXIF Orientation 自动旋转
-    .withMetadata({ exif: {}, iptc: {}, xmp: {}, icc: {} }) // 清空元数据
-    .resize({
-      width: 2048,
-      height: 2048,
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .toFormat(format, { quality: format === 'png' ? undefined : 85 })
-    .toFile(destPath)
-
-  return {
-    filename: outputName,
-    url: `/uploads/${outputName}`,
-    width: width || 4,
-    height: height || 3,
-  }
-}
+// 展示用主图的最长边
+const MAX_DISPLAY_SIZE = 2048
 
 /**
  * 处理上传的图片并输出为 Buffer
  * @param {string} srcPath - 上传后的临时文件路径
- * @returns {Promise<{buffer: Buffer, format: string, ext: string, width: number, height: number}|null>}
+ * @returns {Promise<{buffer: Buffer, originalBuffer: Buffer, format: string, ext: string, width: number, height: number, animated: boolean}|null>}
  */
 async function processUploadedImageToBuffer(srcPath) {
   const sharp = require('sharp')
@@ -95,15 +52,37 @@ async function processUploadedImageToBuffer(srcPath) {
     return null
   }
 
-  // 使用 sharp 处理：限制像素、剥离元数据、压缩，输出 Buffer
+  // 原始字节，用于单独保存「原图」（不重编码、不压缩）
+  const originalBuffer = fs.readFileSync(srcPath)
+
+  // 动图：sharp 重编码 GIF 只会保留首帧，因此直接沿用原文件以保持动画
+  if (format === 'gif') {
+    try {
+      const meta = await sharp(originalBuffer, { limitInputPixels: 64000000 }).metadata()
+      if (meta.pages && meta.pages > 1) {
+        return {
+          buffer: originalBuffer,
+          originalBuffer,
+          format,
+          ext: ALLOWED_FORMATS[format].ext,
+          width: meta.width || 4,
+          height: meta.height || 3,
+          animated: true,
+        }
+      }
+    } catch (err) {
+      console.error('读取 GIF 信息失败，按静态图处理:', err.message)
+    }
+  }
+
+  // 使用 sharp 处理：限制像素、剥离元数据（sharp 默认不回写 EXIF/ICC）、压缩，输出 Buffer
   const { data, info } = await sharp(srcPath, {
     limitInputPixels: 64000000, // 8000 * 8000，防止超大图解压炸弹
   })
     .rotate()
-    .withMetadata({ exif: {}, iptc: {}, xmp: {}, icc: {} })
     .resize({
-      width: 2048,
-      height: 2048,
+      width: MAX_DISPLAY_SIZE,
+      height: MAX_DISPLAY_SIZE,
       fit: 'inside',
       withoutEnlargement: true,
     })
@@ -112,11 +91,38 @@ async function processUploadedImageToBuffer(srcPath) {
 
   return {
     buffer: data,
+    originalBuffer,
     format,
     ext: ALLOWED_FORMATS[format].ext,
     width: info.width || 4,
     height: info.height || 3,
+    animated: false,
   }
 }
 
-module.exports = { detectImageFormat, processUploadedImage, processUploadedImageToBuffer, ALLOWED_FORMATS }
+/**
+ * 从已处理的图片 Buffer 生成小尺寸缩略图
+ * 动图会尽量保留动画，失败时回退为静态首帧
+ * @param {Buffer} buffer - 已处理的图片 Buffer
+ * @param {string} format - 图片格式（jpeg/png/webp/gif/avif/bmp）
+ * @returns {Promise<Buffer>} 缩略图 Buffer
+ */
+async function processThumbnail(buffer, format) {
+  const sharp = require('sharp')
+  const animated = format === 'gif'
+  try {
+    return await sharp(buffer, { limitInputPixels: 64000000, animated })
+      .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
+      .toFormat(format, { quality: format === 'png' ? undefined : 80, animated })
+      .toBuffer()
+  } catch (err) {
+    // 动图缩略失败时退化为静态首帧，不阻断上传
+    if (!animated) throw err
+    return sharp(buffer, { limitInputPixels: 64000000 })
+      .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
+      .toFormat(format)
+      .toBuffer()
+  }
+}
+
+module.exports = { detectImageFormat, processUploadedImageToBuffer, processThumbnail, ALLOWED_FORMATS }

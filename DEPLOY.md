@@ -85,7 +85,7 @@ PORT=3001
 JWT_SECRET=<替换为生成的64位随机串>
 
 # 首次启动时的管理员初始密码（登录后请在后台「修改密码」中更换）
-ADMIN_INITIAL_PASSWORD=ChangeMe@123!
+ADMIN_INITIAL_PASSWORD=123456
 
 # 前端访问域名（CORS 白名单，多个用英文逗号分隔，注意与 Nginx 配置一致）
 FRONTEND_URL=https://your-domain.com

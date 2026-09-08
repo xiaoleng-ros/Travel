@@ -8,12 +8,18 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 })
 
+// 上传接口由 uploadLimiter 单独限流，此处跳过，避免一次上传被双重计数
+function isUploadRequest(req) {
+  return req.method === 'POST' && /^\/admin\/albums\/\d+\/photos\/?$/.test(req.path)
+}
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,
   message: { code: 429, message: '请求过于频繁，请稍后再试' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: isUploadRequest,
 })
 
 // 上传接口独立限流：防止大文件批量上传造成 DoS

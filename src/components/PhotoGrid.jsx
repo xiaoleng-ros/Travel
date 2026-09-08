@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+// @refresh reset
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react'
 import PhotoItem from './PhotoItem'
 import { useTheme } from '../context/ThemeContext'
+import { computeGridLayout } from '../utils/masonry'
 
 export default function PhotoGrid({ photos, onPhotoClick, onReachEnd, hasMore = false, isLoadingMore = false }) {
   const { theme } = useTheme()
@@ -9,41 +11,61 @@ export default function PhotoGrid({ photos, onPhotoClick, onReachEnd, hasMore = 
   const [hoveredId, setHoveredId] = useState(null)
   const [scrollTop, setScrollTop] = useState(0)
   const containerRef = useRef(null)
-  const [containerHeight, setContainerHeight] = useState(0)
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200)
+  const [viewportHeight, setViewportHeight] = useState(0)
+  const [containerWidth, setContainerWidth] = useState(0)
   const [ratios, setRatios] = useState({})
 
-  const { columns, itemWidth, gap } = useMemo(() => {
-    const w = windowWidth
-    const cols = Math.max(2, Math.floor((w + 4) / 274))
-    const iw = (w - (cols - 1) * 4) / cols
-    return { columns: cols, itemWidth: iw, gap: 4, containerWidth: w }
-  }, [windowWidth])
-
-  useEffect(() => {
-    const onResize = () => {
-      setWindowWidth(window.innerWidth)
-      if (containerRef.current) {
-        setContainerHeight(containerRef.current.clientHeight)
-      }
-    }
-    onResize()
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-
-  useEffect(() => {
+  // 量测容器真实内容宽度（clientWidth 不含滚动条），避免按 window.innerWidth 算导致网格超宽被裁
+  useLayoutEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const onScroll = () => {
-      setScrollTop(el.scrollTop)
-      if (!onReachEnd || !hasMore || isLoadingMore) return
-      if (el.scrollHeight - el.scrollTop - el.clientHeight < 600) {
-        onReachEnd()
-      }
+    const measure = () => {
+      setContainerWidth(el.clientWidth)
+      setViewportHeight(window.innerHeight)
     }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    const onResize = () => setViewportHeight(window.innerHeight)
+    window.addEventListener('resize', onResize)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', onResize)
+    }
+  }, [])
+
+  // 列宽取整 + 剩余像素对称分配到两侧，保证左右间距一致
+  const { columns, itemWidth, gap, offsetX } = useMemo(
+    () => computeGridLayout(containerWidth),
+    [containerWidth]
+  )
+
+  // 整页滚动：监听 window 滚动，Hero 等内容随文档一起滚走
+  useEffect(() => {
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        ticking = false
+        const el = containerRef.current
+        if (!el) return
+        setScrollTop(window.scrollY)
+        if (!onReachEnd || !hasMore || isLoadingMore) return
+        // 触底检测：网格底部（文档坐标）进入视口底部 600px 内即加载更多
+        const rect = el.getBoundingClientRect()
+        const gridBottomDoc = rect.top + window.scrollY + rect.height
+        if (window.scrollY + window.innerHeight > gridBottomDoc - 600) {
+          onReachEnd()
+        }
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (ticking) cancelAnimationFrame(0)
+    }
   }, [onReachEnd, hasMore, isLoadingMore])
 
   const getRatio = useCallback((photo) => {
@@ -59,17 +81,19 @@ export default function PhotoGrid({ photos, onPhotoClick, onReachEnd, hasMore = 
       const ratio = getRatio(photo)
       const h = itemWidth * ratio
       const minIdx = heights.indexOf(Math.min(...heights))
-      const left = minIdx * (itemWidth + gap)
+      const left = offsetX + minIdx * (itemWidth + gap)
       const top = heights[minIdx]
       items.push({ top, left, height: h, width: itemWidth })
       heights[minIdx] += h + gap
     })
     return { items, totalHeight: Math.max(...heights, 0) }
-  }, [photos, columns, itemWidth, gap, getRatio])
+  }, [photos, columns, itemWidth, gap, offsetX, getRatio])
 
   const visibleRange = useMemo(() => {
+    // 上方保留 500px；下方扩到 1500px，配合 PhotoItem 的 1200px 预加载距离，
+    // 让即将滚入视口的图片提前开始下载，消除滚动时的转圈等待
     const viewTop = Math.max(0, scrollTop - 500)
-    const viewBottom = scrollTop + containerHeight + 500
+    const viewBottom = scrollTop + viewportHeight + 1500
     const indices = []
     layout.items.forEach((item, i) => {
       if (item.top + item.height >= viewTop && item.top <= viewBottom) {
@@ -77,7 +101,7 @@ export default function PhotoGrid({ photos, onPhotoClick, onReachEnd, hasMore = 
       }
     })
     return indices
-  }, [scrollTop, containerHeight, layout])
+  }, [scrollTop, viewportHeight, layout])
 
   const handleHoverStart = useCallback((id) => setHoveredId(id), [])
   const handleHoverEnd = useCallback(() => setHoveredId(null), [])
@@ -91,14 +115,15 @@ export default function PhotoGrid({ photos, onPhotoClick, onReachEnd, hasMore = 
   }, [])
 
   return (
-    <div ref={containerRef} className="w-full h-screen py-1 overflow-auto virtual-scroll-container">
-      <div
-        style={{
-          height: `${layout.totalHeight + (hasMore || isLoadingMore ? 80 : 0)}px`,
-          width: '100%',
-          position: 'relative',
-        }}
-      >
+    <div className="px-3 md:px-10 lg:px-16">
+      <div ref={containerRef} className="w-full">
+        <div
+          style={{
+            height: `${layout.totalHeight + (hasMore || isLoadingMore ? 80 : 0)}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
         {visibleRange.map((i) => {
           const photo = photos[i]
           const pos = layout.items[i]
@@ -133,6 +158,7 @@ export default function PhotoGrid({ photos, onPhotoClick, onReachEnd, hasMore = 
           <div className={`w-8 h-8 border-2 rounded-full animate-spin ${isDark ? 'border-white/10 border-t-white/60' : 'border-[#1a1a1a]/10 border-t-[#1a1a1a]'}`} />
         </div>
       )}
+      </div>
     </div>
   )
 }

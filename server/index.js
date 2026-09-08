@@ -81,7 +81,17 @@ if (process.env.NODE_ENV === 'production') {
   const distDir = path.join(__dirname, '..', 'dist')
   if (fs.existsSync(distDir)) {
     // 静态资源（Vite 构建产物，文件名带 hash，可长缓存）
-    app.use(express.static(distDir, { index: 'index.html' }))
+    // index.html 不含 hash，必须禁用缓存，否则前端发版后用户仍加载旧的入口
+    app.use(express.static(distDir, {
+      index: 'index.html',
+      setHeaders: (res, filePath) => {
+        if (path.basename(filePath) === 'index.html') {
+          res.setHeader('Cache-Control', 'no-cache')
+        } else {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+        }
+      },
+    }))
     // 非 /api 与 /uploads 的路径回退到 index.html，由前端路由接管
     app.get(/^\/(?!api|uploads).*/, (req, res) => {
       res.sendFile(path.join(distDir, 'index.html'))
@@ -103,10 +113,38 @@ app.use((err, req, res, next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ code: 400, message: '文件大小不能超过20MB' })
   }
+  // 一次上传超过 upload.array 限定的数量时会抛此错误，给出明确提示而非笼统的 500
+  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(400).json({ code: 400, message: '一次最多上传20张照片' })
+  }
   res.status(500).json({ code: 500, message: '服务器内部错误' })
 })
 
+/**
+ * 清理上传过程中残留的临时文件。
+ * 正常流程由 finally 删除，但进程崩溃、强杀等异常退出会留下 .tmp 垃圾，
+ * 这里在启动时兜底回收（只清理超过 1 小时的，避免误删正在上传的文件）。
+ */
+function cleanupOrphanTempFiles() {
+  const uploadDir = path.join(__dirname, 'uploads')
+  if (!fs.existsSync(uploadDir)) return
+  const MAX_AGE = 60 * 60 * 1000
+  let removed = 0
+  for (const name of fs.readdirSync(uploadDir)) {
+    if (!name.endsWith('.tmp')) continue
+    const filePath = path.join(uploadDir, name)
+    try {
+      if (Date.now() - fs.statSync(filePath).mtimeMs > MAX_AGE) {
+        fs.unlinkSync(filePath)
+        removed++
+      }
+    } catch {}
+  }
+  if (removed > 0) console.log(`已清理 ${removed} 个残留临时文件`)
+}
+
 app.listen(PORT, () => {
+  cleanupOrphanTempFiles()
   console.log(`服务器运行在 http://localhost:${PORT}`)
   console.log(`上传目录: ${path.join(__dirname, 'uploads')}`)
 })

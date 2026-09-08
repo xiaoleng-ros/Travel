@@ -1,5 +1,15 @@
-import { motion } from 'framer-motion'
+import { motion } from 'motion/react'
 import { ChevronLeft, ChevronRight, Close, Calendar } from '../icons'
+import { getDisplayTitle } from '../utils/title'
+
+// 将 ISO 日期格式化为「2026 年 6 月 14 日」；若已是中文日期（如管理端传入）则原样返回
+function formatDate(iso) {
+  if (!iso) return ''
+  if (typeof iso === 'string' && iso.includes('年')) return iso
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`
+}
 
 export default function Lightbox({
   photo,
@@ -10,6 +20,9 @@ export default function Lightbox({
   onNext,
   isLoading,
 }) {
+  const displayTitle = getDisplayTitle(photo.title)
+  const dateStr = formatDate(photo.create_time)
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -42,7 +55,7 @@ export default function Lightbox({
 
             <img
               src={photo.url}
-              alt={photo.title}
+              alt={displayTitle || `照片 ${currentIndex + 1}`}
               className="max-w-full max-h-[95vh] w-auto h-auto block object-contain"
             />
 
@@ -71,19 +84,18 @@ export default function Lightbox({
                 transition={{ duration: 0.3, delay: 0.2 }}
               >
                 <h3 className="text-white text-lg font-medium mb-2 w-10/12 line-clamp-1 break-all font-sans-body">
-                  {photo.title}
+                  {displayTitle || `照片 ${currentIndex + 1}`}
                 </h3>
                 {photo.description && (
                   <p className="text-white/70 leading-relaxed mb-3 text-sm font-sans-body">{photo.description}</p>
                 )}
                 <div className="flex items-center gap-4 text-gray-300">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    <p className="text-xs font-sans-body">{photo.create_time}</p>
-                  </div>
-                  <div className="text-xs text-gray-400 font-sans-body">
-                    {photo.width} × {photo.height}
-                  </div>
+                  {dateStr && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      <p className="text-xs font-sans-body">{dateStr}</p>
+                    </div>
+                  )}
                   <div className="text-xs text-gray-400 font-sans-body">
                     {currentIndex + 1} / {totalCount}
                   </div>
