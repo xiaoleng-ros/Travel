@@ -10,5 +10,11 @@ Thumbs.db
 server/data/
 server/uploads/
 
+# EdgeOne 版本地开发数据库（libSQL 本地文件）
+api-dev.db
+api-dev.db-journal
+api-dev.db-shm
+api-dev.db-wal
+
 # 本地 IDE 工作目录（调试截图与记忆等，不入库）
 .workbuddy/
