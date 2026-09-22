@@ -34,11 +34,23 @@ function authMiddleware(req, res, next) {
   }
 
   try {
-    const user = verifyToken(token)
+    const payload = verifyToken(token)
     if (db.isTokenBlacklisted(token)) {
       return res.status(401).json({ code: 401, message: '登录已过期' })
     }
-    req.user = user
+
+    // 密码一旦被修改，此前签发的所有 token 立即失效。
+    // 仅靠黑名单只能作废「当前这一个」token，其他设备上已登录的会话仍会在 7 天有效期内畅通无阻。
+    // 这里用签发时间（iat）与密码修改时间比对，实现「改密码 = 全端下线」。
+    const record = db.findUser(payload.id)
+    if (!record) {
+      return res.status(401).json({ code: 401, message: '账号不存在，请重新登录' })
+    }
+    if (record.password_changed_at && payload.iat < record.password_changed_at) {
+      return res.status(401).json({ code: 401, message: '密码已变更，请重新登录' })
+    }
+
+    req.user = payload
     next()
   } catch {
     return res.status(401).json({ code: 401, message: '登录已过期' })

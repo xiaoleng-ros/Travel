@@ -2,6 +2,7 @@
 
 > 适用版本：当前仓库代码（已完成安全修复与依赖升级）。
 > 项目结构：`前端 Vite + React 19`（根目录） / `后端 Express + Node`（`server/` 目录）。
+> 近期改进项（做了什么、改到什么程度、还剩什么）见 **[IMPROVEMENTS.md](./IMPROVEMENTS.md)**。
 
 ---
 
@@ -95,6 +96,13 @@ FRONTEND_URL=https://your-domain.com
 
 # 生产模式（必须为 production，否则登录 cookie 不走 secure、不托管前端产物）
 NODE_ENV=production
+
+# 数据库归档备份目录（可选）：默认在 server/data/backups 下，与主库同盘。
+# 强烈建议改到另一块磁盘或异地挂载点，否则磁盘损坏时主库与备份一起丢。
+# BACKUP_DIR=/backup/photo-memoir/archives
+
+# 归档备份保留份数（可选，默认 20，超出自动删除最旧的）
+# BACKUP_KEEP=20
 ```
 
 > ⚠️ `STORAGE_ENCRYPTION_KEY` 为可选项：若此前已保存过云存储凭证，**不要改动**该密钥，否则凭证无法解密。
@@ -203,16 +211,59 @@ sudo certbot --nginx -d your-domain.com
 
 ## 六、数据备份与恢复
 
-### 需要备份的数据
+### 程序内置的两层备份
+
+每次写入数据库前，程序会自动保留当前版本：
+
+| 层级 | 位置 | 作用 |
+|------|------|------|
+| 快速恢复点 | `server/data/db.backup.json` | 固定文件名。主库损坏时启动自动从这里恢复 |
+| 归档备份 | `BACKUP_DIR`（默认 `server/data/backups/`） | 带时间戳的多份历史版本，按 `BACKUP_KEEP` 轮转，可回溯到任意历史时点 |
+
+> ⚠️ 归档目录默认与主库同盘，**只对「误操作」有效，对「磁盘损坏」无效**。
+> 生产环境务必把 `BACKUP_DIR` 指到另一块磁盘、异地挂载点或云盘同步目录。
+
+### 可选的第三层：数据库同步到对象存储
+
+如果你的照片存放在七牛 / OSS / COS，可以开启云端备份，让 db.json 也离开这台服务器：
+
+```env
+BACKUP_TO_CLOUD=true
+BACKUP_CLOUD_PREFIX=backups/
+```
+
+开启后每次写入都会上传 `<prefix>db-latest.json`（覆盖），每天首次写入额外上传一份 `db-YYYY-MM-DD.json`。
+备份上传不阻塞本地写入，失败只记日志。
+
+> ⚠️ **开启前必须确认权限**：db.json 内含管理员密码哈希、token 黑名单与加密后的存储凭证。
+> 若 bucket 是「公开读」（图片走 CDN 通常如此），备份文件会被任何人直接下载。
+> 请在对象存储控制台为 `backups/` 前缀设置为**私有读**，或新建一个独立的私有 bucket 并单独配置。
+>
+> 清理交给云厂商：可在控制台为 `backups/` 前缀配置生命周期规则（例如 30 天后自动删除），
+> 程序本身不做云端删除，因而无需授予删除权限。
+
+### 七牛：请务必在后台填写 Region
+
+后台「对象存储」页配置七牛时，**建议填写 Region**（`z0` 华东 / `z1` 华北 / `z2` 华南 / `na0` 北美 / `as0` 东南亚）。
+
+不填也能用，但每次上传前 SDK 都要先查询一次存储区域。除了多一次网络往返，
+更麻烦的是：**区域查询失败时（凭证失效、网络抖动、服务端异常），七牛 SDK 会抛出
+它自己回调风格 API 没能接住的 Promise 拒绝——Node 15+ 下这会直接终止整个服务进程。**
+
+本项目已做两层防护：填写 Region 后彻底跳过区域查询；未填写时由进程级兜底保证服务不退出。
+但填上它仍是最稳妥的做法。
+
+### 需要额外备份的数据
+
 | 路径 | 内容 |
 |------|------|
 | `server/data/` | 核心数据库 db.json（管理员账号、相册、照片元数据、存储配置） |
 | `server/uploads/` | 本地存储的照片文件（若使用云存储则无需备份此目录） |
 
-### 定时备份（Linux crontab）
+### 定时备份到本地磁盘之外（Linux crontab）
 
 ```bash
-# 每天凌晨 3 点备份到 /backup/photo-memoir/
+# 每天凌晨 3 点把数据同步到 /backup/photo-memoir/
 mkdir -p /backup/photo-memoir
 # crontab -e 添加：
 0 3 * * * rsync -a --delete /opt/Travel/server/data/ /backup/photo-memoir/data/ && rsync -a --delete /opt/Travel/server/uploads/ /backup/photo-memoir/uploads/
@@ -223,6 +274,19 @@ mkdir -p /backup/photo-memoir
 2. 用备份文件覆盖对应目录
 3. 启动服务：`pm2 start photo-memoir`
 4. 程序内置容错：主 db.json 损坏时会自动从 `db.backup.json` 恢复并给出警告日志
+
+---
+
+## 六·补、健康检查与监控
+
+服务提供 `GET /healthz`，返回进程运行状态（不暴露任何业务数据）：
+
+```bash
+curl https://your-domain.com/healthz
+# {"status":"ok","uptime":1234,"time":"2026-09-21T10:00:00.000Z"}
+```
+
+可直接接入 UptimeRobot 等免费监控服务做宕机告警。该端点挂在 `/api` 之外，不占用接口限流额度。
 
 ---
 
@@ -270,6 +334,8 @@ pm2 restart photo-memoir
 - [ ] 浏览器通过 `https://你的域名` 能打开首页、进入 `/admin` 登录
 - [ ] 首次登录后已在后台**修改初始密码**
 - [ ] 定时备份任务已配置（crontab / 计划任务）
+- [ ] `BACKUP_DIR` 已指向另一块磁盘或异地目录（不要与主库同盘）
+- [ ] `https://你的域名/healthz` 返回 `{"status":"ok"}`，并已接入监控告警
 - [ ] 云存储模式（可选）：后台「对象存储」页配置并测试连通性，注意保存凭证
 
 ---
@@ -278,11 +344,15 @@ pm2 restart photo-memoir
 
 | 项目 | 现状 | 建议 |
 |------|------|------|
-| 数据容量 | JSON 单文件存储 | 照片上万后建议迁移到 SQLite / 数据库 |
+| 数据容量 | JSON 单文件存储，每次写全量重写 | 照片过 2000 张后建议迁移到 SQLite |
 | 管理照片接口 | 一次返回相册全部照片 | 大相册建议后端加分页 |
-| 前端体积 | 主包 551KB | 用 `React.lazy` 做路由级代码分割 |
+| 前端体积 | 主包 426KB（gzip 140KB），后台已做路由级懒加载 | 可进一步按需引入图标 |
+| HEIC 支持 | **不支持**，iPhone 默认拍照格式无法上传 | 引入 HEIC 解码能力（`heic-convert` 或带 libheif 的 sharp 构建） |
+| 照片搜索 | 不支持 | 按标题 / 日期区间检索 |
+| 分享功能 | 不支持 | 单张或整册生成只读分享链接 |
 | Google Fonts | 依赖外部网络 | 可自托管字体，减少隐私依赖并提升加载速度 |
-| 备份保留 | 仅保留一份滚动备份 | 异地/云存储定期归档 |
+| 备份归档 | 已支持轮转、异地目录与云端同步 | **需手动配置**：设 `BACKUP_DIR` 指向异地，或开启 `BACKUP_TO_CLOUD`；否则备份仍与主库同盘 |
+| 老照片拍摄时间 | 历史数据无 `taken_at`，按上传时间展示 | 如需补全，可写脚本从保留的原图重新读取 EXIF |
 
 ---
 

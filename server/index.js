@@ -1,5 +1,17 @@
 require('dotenv').config()
 
+/**
+ * 未处理的 Promise 拒绝不应让整站下线。
+ *
+ * 已知触发场景：七牛 SDK 在查询上传区域失败时（凭证失效、网络抖动、服务端异常），
+ * 会抛出未被其回调风格 API 接住的 Promise 拒绝。Node 15+ 默认直接终止进程，
+ * 表现为「某次上传失败后服务器整体不可用」。
+ * 对相册服务而言，记录日志并继续提供服务，明显优于直接崩溃。
+ */
+process.on('unhandledRejection', (reason) => {
+  console.error('[未处理的 Promise 拒绝]', reason?.message || reason)
+})
+
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
@@ -13,7 +25,7 @@ const authRoutes = require('./routes/auth')
 const albumRoutes = require('./routes/albums')
 const photoRoutes = require('./routes/photos')
 const storageRoutes = require('./routes/storage')
-const publicRoutes = require('./routes/public')
+const { publicRouter, uploadRouter } = require('./routes/public')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -24,6 +36,20 @@ app.set('trust proxy', process.env.TRUST_PROXY || 'loopback')
 
 // 访问日志：生产使用 combined 格式（含来源 IP、状态码、耗时）
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
+
+/**
+ * 健康检查端点，供 UptimeRobot 等外部监控探活。
+ * 刻意挂在 /api 之外，避免占用接口限流额度；只返回进程运行状态，
+ * 不暴露任何业务数据或版本细节。
+ */
+app.get('/healthz', (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    time: new Date().toISOString(),
+  })
+})
 
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map(url => url.trim())
 
@@ -66,9 +92,10 @@ app.use(cookieParser())
 // uploads 访问统一通过 publicRoutes 中的安全路由处理，避免双重暴露
 
 app.use('/api', apiLimiter)
-app.use('/api', publicRoutes)
-// 上传文件同时通过 /uploads/:filename 暴露，兼容前端已有 URL
-app.use(publicRoutes)
+// 公开相册接口必须走限流：它们每次都要全表扫描并排序，无限流时可被用来放大 CPU 消耗
+app.use('/api', publicRouter)
+// 图片单独走根路径且不设限流 —— 前台瀑布流一屏就会请求几十张图（前端 URL 形如 /uploads/xxx.webp）
+app.use(uploadRouter)
 
 app.use('/api/admin', authRoutes)
 app.use('/api/admin/albums', albumRoutes)

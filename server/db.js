@@ -7,6 +7,38 @@ const { encrypt, decrypt } = require('./utils/crypto')
 const DB_PATH = path.join(__dirname, 'data', 'db.json')
 
 /**
+ * 数据库备份目录。
+ * 默认与主库同目录（data/backups），但可通过 BACKUP_DIR 指向另一块磁盘、
+ * 挂载的异地目录或云盘同步目录 —— 只把备份放在主库旁边，
+ * 磁盘损坏或服务器回收时会连主库一起丢，起不到备份作用。
+ */
+const BACKUP_DIR = process.env.BACKUP_DIR
+  ? path.resolve(process.env.BACKUP_DIR)
+  : path.join(__dirname, 'data', 'backups')
+
+// 归档备份保留份数，超出后自动删除最旧的
+const BACKUP_KEEP = Math.max(Number(process.env.BACKUP_KEEP) || 20, 1)
+
+/**
+ * 云端备份开关（默认关闭）。
+ *
+ * 为什么需要：照片本体放在对象存储上，但「哪张照片属于哪个相册、标题是什么、
+ * 何时拍摄」这些关联信息全在 db.json 里。db.json 一丢，云端的照片就成了一堆
+ * 无法归类的无名文件 —— 元数据才是真正的单点。
+ *
+ * 为什么默认关闭：db.json 含管理员密码哈希、token 黑名单与加密后的存储凭证。
+ * 若 bucket 为「公开读」（图片走 CDN 时通常如此），备份文件会被任何人直接下载。
+ * 开启前请确认备份前缀为私有读权限，或改用独立的私有 bucket。
+ */
+const BACKUP_TO_CLOUD = process.env.BACKUP_TO_CLOUD === 'true'
+
+// 备份对象在 bucket 中的前缀，务必与照片的 uploads/ 区分开
+const BACKUP_CLOUD_PREFIX = (process.env.BACKUP_CLOUD_PREFIX || 'backups/').replace(/^\/+/, '')
+
+// 上一次写入「按天归档」的日期，避免同一天重复上传
+let lastDailyBackupDate = null
+
+/**
  * 原子写入：先写临时文件并 fsync 落盘，再用 rename 覆盖目标。
  * 直接 writeFileSync 覆盖时，若写入过程中进程崩溃或断电，db.json 会停在半截状态，
  * 导致整个库损坏、照片元数据全部丢失；rename 在同分区内是原子操作，可避免该风险。
@@ -147,6 +179,16 @@ function load() {
       console.error('照片 id 迁移写入失败:', e.message)
     }
   }
+  // 兼容旧数据库：把无过期时间的旧格式黑名单条目升级为可回收格式
+  if (migrateTokenBlacklist()) {
+    try {
+      const dataToSave = { ...db }
+      delete dataToSave._nextIds
+      writeFileAtomic(DB_PATH, JSON.stringify(dataToSave, null, 2))
+    } catch (e) {
+      console.error('token 黑名单迁移写入失败:', e.message)
+    }
+  }
   // 清理已过期的 token 黑名单条目
   pruneTokenBlacklist()
   // 仅当首次生成默认管理员时打印初始密码，便于用户登录后修改
@@ -160,31 +202,108 @@ function load() {
   return db
 }
 
+/**
+ * 把当前数据库归档一份带时间戳的副本，并按 BACKUP_KEEP 清理最旧的。
+ * 文件名使用 ISO 时间戳，字典序即时间序，便于排序与人工挑选。
+ */
+function archiveBackup() {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true })
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 23)
+    fs.copyFileSync(DB_PATH, path.join(BACKUP_DIR, `db-${stamp}.json`))
+
+    const archives = fs.readdirSync(BACKUP_DIR)
+      .filter((name) => /^db-.*\.json$/.test(name))
+      .sort()
+    const expired = archives.slice(0, Math.max(archives.length - BACKUP_KEEP, 0))
+    for (const name of expired) {
+      try { fs.unlinkSync(path.join(BACKUP_DIR, name)) } catch {}
+    }
+  } catch (err) {
+    console.error('归档数据库备份失败:', err.message)
+  }
+}
+
+/**
+ * 把数据库快照上传到当前激活的对象存储（七牛 / OSS / COS）。
+ *
+ * 上传两类对象：
+ * - `<prefix>db-latest.json`：每次写入都覆盖，始终代表最新状态；
+ * - `<prefix>db-YYYY-MM-DD.json`：每天首次写入时上传一份，用于回溯历史。
+ *
+ * 清理交给对象存储自身的生命周期规则 —— 适配器没有 list 能力，
+ * 在代码里做轮转反而需要额外权限，不如让云厂商那边配一次性规则。
+ *
+ * 本函数由调用方以不阻塞的方式触发，失败只记录日志，
+ * 绝不允许备份问题影响到正常的数据写入。
+ *
+ * @param {string} content - 数据库 JSON 文本
+ */
+async function uploadBackupToCloud(content) {
+  const { provider, config } = getActiveStorageConfig()
+  // 本地存储模式：没有云端可备份
+  if (provider === 'local' || !config || Object.keys(config).length === 0) return
+
+  // 延迟 require：storage/index.js 依赖本模块，写在顶层会形成循环依赖
+  const { createAdapter } = require('./storage/providers')
+  const adapter = createAdapter(provider, config)
+  const buffer = Buffer.from(content, 'utf-8')
+
+  const tasks = [adapter.upload(buffer, `${BACKUP_CLOUD_PREFIX}db-latest.json`)]
+
+  const today = new Date().toISOString().slice(0, 10)
+  if (lastDailyBackupDate !== today) {
+    lastDailyBackupDate = today
+    tasks.push(adapter.upload(buffer, `${BACKUP_CLOUD_PREFIX}db-${today}.json`))
+  }
+
+  const results = await Promise.allSettled(tasks)
+  const firstFailure = results.find((r) => r.status === 'rejected')
+  if (firstFailure) {
+    throw new Error(firstFailure.reason?.message || '上传失败')
+  }
+}
+
 async function save() {
-  await saveMutex.runExclusive(() => {
+  const content = await saveMutex.runExclusive(() => {
     const dir = path.dirname(DB_PATH)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
-    // 滚动备份：写入前将当前文件复制为 db.backup.json，防止写入中断导致数据丢失
+    // 写入前保留当前版本：
+    // 1) db.backup.json —— 固定名，供启动时快速恢复损坏的主库；
+    // 2) BACKUP_DIR 下的时间戳归档 —— 可回溯到任意历史版本，并按份数轮转。
     if (fs.existsSync(DB_PATH)) {
       try {
         fs.copyFileSync(DB_PATH, path.join(dir, 'db.backup.json'))
       } catch (err) {
         console.error('备份数据库失败:', err.message)
       }
+      archiveBackup()
     }
 
     // _nextIds 为运行时内部状态，不持久化
     const dataToSave = { ...db }
     delete dataToSave._nextIds
 
-    writeFileAtomic(DB_PATH, JSON.stringify(dataToSave, null, 2))
+    const serialized = JSON.stringify(dataToSave, null, 2)
+    writeFileAtomic(DB_PATH, serialized)
+    return serialized
   })
+
+  // 云端备份不参与 await：本地写入已经成功，云端上传慢或失败都不应拖累请求
+  if (BACKUP_TO_CLOUD) {
+    uploadBackupToCloud(content).catch((err) => {
+      console.error('云端备份失败:', err.message)
+    })
+  }
+
+  return content
 }
 
 load()
 
 function getUsers() { return db.users }
+function findUser(id) { return db.users.find(u => u.id === id) }
 function getAlbums() { return db.albums }
 
 // 未删除的照片（对外默认视图）
@@ -308,15 +427,26 @@ function getDeletedPhotos() {
 }
 
 /**
+ * 取照片的时间戳：优先使用 EXIF 拍摄时间，缺失时回退到上传时间。
+ * 回忆录按「什么时候拍的」组织才有意义；历史数据没有 taken_at，行为与改动前一致。
+ * 注意 taken_at 形如 "2024-05-03T14:30:00"（不带时区），
+ * JS 会按本地时间解析，与拍摄当地时间的语义吻合。
+ */
+function photoTimestamp(photo) {
+  const time = new Date(photo.taken_at || photo.create_time).getTime()
+  return Number.isNaN(time) ? 0 : time
+}
+
+/**
  * 统一的展示排序：管理员手动排过序的按 sort_order 升序，
- * 未排序的照片（无 sort_order 字段）退化为按创建时间倒序（新的在前）。
+ * 未排序的照片（无 sort_order 字段）退化为按拍摄时间倒序（新的在前）。
  */
 function sortPhotosForDisplay(photos) {
   return [...photos].sort((a, b) => {
     const ao = a.sort_order ?? Number.MAX_SAFE_INTEGER
     const bo = b.sort_order ?? Number.MAX_SAFE_INTEGER
     if (ao !== bo) return ao - bo
-    return new Date(b.create_time) - new Date(a.create_time)
+    return photoTimestamp(b) - photoTimestamp(a)
   })
 }
 
@@ -345,6 +475,23 @@ async function reorderPhotos(albumId, orderedIds) {
   return sortPhotosForDisplay(inAlbum)
 }
 
+/**
+ * 修改用户密码，并记录本次修改时间。
+ * password_changed_at 采用秒级时间戳，与 JWT 的 iat 单位一致，
+ * 便于在鉴权中间件中直接比较，让改密码前签发的所有 token 立即失效。
+ * @param {number} id - 用户 id
+ * @param {string} passwordHash - 已 bcrypt 加密的密码
+ * @returns {object|null} 更新后的用户对象
+ */
+async function changeUserPassword(id, passwordHash) {
+  const user = findUser(id)
+  if (!user) return null
+  user.password = passwordHash
+  user.password_changed_at = Math.floor(Date.now() / 1000)
+  await save()
+  return user
+}
+
 function isTokenBlacklisted(token) {
   if (!db.tokenBlacklist || !db.tokenBlacklist.length) return false
   try {
@@ -357,6 +504,44 @@ function isTokenBlacklisted(token) {
     )
   } catch {}
   return false
+}
+
+/**
+ * 兼容旧数据库：tokenBlacklist 早期实现只存纯 jti 字符串，没有过期时间。
+ * pruneTokenBlacklist 为了安全只能对这类条目「保守保留」，于是它们永不清理，
+ * db.json 会随着每次登录/登出持续膨胀。
+ *
+ * 这里统一升级成 { jti, exp } 格式，并给 7 天宽限期（与 JWT 有效期一致）：
+ * 期间旧 token 仍会被正常拦截，到期后自动回收。
+ * @returns {boolean} 是否发生了迁移（需要落盘）
+ */
+function migrateTokenBlacklist() {
+  if (!Array.isArray(db.tokenBlacklist) || db.tokenBlacklist.length === 0) return false
+  if (!db.tokenBlacklist.some((entry) => typeof entry === 'string')) return false
+
+  const nowSec = Math.floor(Date.now() / 1000)
+  const GRACE_SECONDS = 7 * 24 * 60 * 60
+  const seen = new Set()
+  const migrated = []
+
+  for (const entry of db.tokenBlacklist) {
+    if (typeof entry === 'string') {
+      if (seen.has(entry)) continue
+      seen.add(entry)
+      migrated.push({ jti: entry, exp: nowSec + GRACE_SECONDS })
+      continue
+    }
+    if (entry && typeof entry === 'object') {
+      const jti = entry.jti
+      if (jti && seen.has(jti)) continue
+      if (jti) seen.add(jti)
+      migrated.push(entry)
+    }
+  }
+
+  db.tokenBlacklist = migrated
+  console.log(`[迁移] token 黑名单已升级为带过期时间的格式（${migrated.length} 条，7 天后自动回收）`)
+  return true
 }
 
 // 清理已过期的黑名单条目，避免 db.json 无限增长
@@ -465,6 +650,8 @@ function getActiveStorageConfig() {
 
 module.exports = {
   getUsers,
+  findUser,
+  changeUserPassword,
   getAlbums,
   getPhotos,
   findAlbum,
@@ -484,6 +671,7 @@ module.exports = {
   getPhotosByAlbum,
   getAllPhotos,
   sortPhotosForDisplay,
+  photoTimestamp,
   reorderPhotos,
   save,
   sanitizeKeys,

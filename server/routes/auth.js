@@ -108,9 +108,10 @@ router.post('/change-password', authMiddleware, [
       return res.status(400).json({ code: 400, message: '新密码不能与原密码相同' })
     }
 
-    // 更新密码并强制重新登录（黑名单当前 token，使其立即失效）
-    user.password = bcrypt.hashSync(newPassword, 10)
-    await db.save()
+    // 更新密码。changeUserPassword 会写入 password_changed_at，
+    // 使改密码之前签发的所有 token（含其他设备上的会话）立即失效。
+    await db.changeUserPassword(user.id, bcrypt.hashSync(newPassword, 10))
+    // 再把当前 token 也加入黑名单，覆盖「同一秒内签发」的边界情况
     const currentToken = req.cookies?.admin_token || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null)
     if (currentToken) await db.blacklistToken(currentToken)
 

@@ -32,7 +32,9 @@ const PROVIDER_SCHEMA = {
     name: '七牛云 Kodo',
     fields: [
       { key: 'bucket', label: 'Bucket', placeholder: 'my-bucket', required: true },
-      { key: 'region', label: 'Region（可选）', placeholder: 'cn-east-1', required: false },
+      // 强烈建议填写：指定区域后 SDK 不再每次查询存储区域，可省一次网络往返，
+      // 并避免区域查询失败导致上传报错（详见 storage/providers.js 的说明）
+      { key: 'region', label: 'Region（建议填写）', placeholder: 'z0 华东 / z1 华北 / z2 华南 / na0 北美 / as0 东南亚', required: false },
       { key: 'accessKey', label: 'AccessKey', type: 'password', required: true },
       { key: 'secretKey', label: 'SecretKey', type: 'password', required: true },
       { key: 'cdnDomain', label: 'CDN 域名（可选）', placeholder: 'https://cdn.example.com', required: false },

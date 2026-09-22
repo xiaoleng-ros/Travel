@@ -30,6 +30,11 @@ const upload = multer({
   storage,
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
+    // multer 会把 UTF-8 文件名按 latin1 解码，中文文件名到这里已经变成乱码，
+    // 直接拿去校验会把「海边日落.jpg」这类完全正常的名字判为非法字符而拒收。
+    // 先还原编码再校验，并把修复后的名字写回，后续提取标题时直接使用。
+    file.originalname = fixEncoding(file.originalname)
+
     const ext = path.extname(file.originalname).toLowerCase()
     const allowedExt = /\.(jpg|jpeg|png|gif|webp|bmp|avif)$/i
     if (!allowedExt.test(ext)) {
@@ -93,10 +98,25 @@ async function removePhotoFiles(photo) {
   await Promise.allSettled(keys.map(k => deleteFile(photo.storage_provider, k)))
 }
 
-/** 若被删除的照片正好是相册封面，回退到该相册剩余的第一张照片，避免封面变死链 */
-async function resetAlbumCoverIfNeeded(albumId, removedUrl) {
+/**
+ * 若被删除的照片正好是相册封面，回退到该相册剩余的第一张照片，避免封面变死链。
+ *
+ * 注意这里要拿「全部地址」去比对：上传时封面优先取的是缩略图，
+ * 而删除时如果只拿主图 URL 比对就永远匹配不上 —— 封面会一直指向已被删除的文件，
+ * 前台加载封面得到 404。
+ */
+async function resetAlbumCoverIfNeeded(albumId, removedPhotos) {
   const album = db.findAlbum(albumId)
-  if (!album || album.cover !== removedUrl) return
+  if (!album || !album.cover) return
+
+  const removedUrls = new Set()
+  for (const photo of [].concat(removedPhotos)) {
+    for (const url of [photo.url, photo.thumb, photo.original_url]) {
+      if (url) removedUrls.add(url)
+    }
+  }
+  if (!removedUrls.has(album.cover)) return
+
   const rest = db.getPhotosByAlbum(albumId)
   await db.updateAlbum(albumId, { cover: rest.length > 0 ? (rest[0].thumb || rest[0].url) : '' })
 }
@@ -166,16 +186,18 @@ router.post(
         }
 
         // 生成缩略图（失败不阻断上传，回退到原图）
+        // processThumbnail 统一输出 WebP，扩展名以返回值 ext 为准
         let thumb = { url: saved.url, key: null }
         try {
-          const thumbBuffer = await processThumbnail(info.buffer, info.format)
-          thumb = await saveFile(thumbBuffer, `processed${info.ext}`)
+          const thumbResult = await processThumbnail(info.buffer, info.format)
+          thumb = await saveFile(thumbResult.buffer, `thumb${thumbResult.ext}`)
         } catch (err) {
           console.error('生成缩略图失败:', err.message)
         }
 
         // 对从文件名提取的标题进行消毒，防止特殊字符与 XSS
-        const rawName = fixEncoding(path.parse(f.originalname).name)
+        // （编码已在 fileFilter 阶段还原，这里直接取名字即可）
+        const rawName = path.parse(f.originalname).name
         const safeName = sanitizeText(rawName, 100) || '未命名'
 
         return {
@@ -189,6 +211,8 @@ router.post(
           title: safeName,
           description: '',
           create_time: new Date().toISOString(),
+          // 拍摄时间（EXIF），无拍摄信息时为 null，回退按上传时间展示
+          taken_at: info.takenAt || null,
           storage_provider: saved.provider,
           storage_key: saved.key || null,
           thumb_key: thumb.key || null,
@@ -198,8 +222,15 @@ router.post(
         console.error('处理上传图片失败:', err.message)
         return null
       } finally {
-        // 成功、失败、提前 return 都会走到这里，确保临时文件不残留
-        try { fs.unlinkSync(tmpPath) } catch {}
+        // 成功、失败、提前 return 都会走到这里，确保临时文件不残留。
+        // Windows 上 sharp 可能尚未释放文件句柄，直接 unlink 会抛 EBUSY/EPERM，
+        // 因此改用带重试的 rmSync（maxRetries 仅在 Windows 生效），
+        // 否则每次上传都会留下一个 .tmp，只能等下次启动时兜底清理。
+        try {
+          fs.rmSync(tmpPath, { force: true, maxRetries: 5, retryDelay: 100 })
+        } catch (err) {
+          console.error('清理临时文件失败:', tmpPath, err.message)
+        }
       }
     })
 
@@ -257,7 +288,7 @@ router.patch('/albums/:albumId/photos/reorder', authMiddleware, albumIdParam, [
 router.delete('/photos/:id', authMiddleware, photoIdParam, async (req, res) => {
   const photo = await db.deletePhoto(Number(req.params.id))
   if (!photo) return res.status(404).json({ code: 404, message: '照片不存在' })
-  await resetAlbumCoverIfNeeded(photo.album_id, photo.url)
+  await resetAlbumCoverIfNeeded(photo.album_id, photo)
   res.json({ code: 200, message: '已移入回收站' })
 })
 
@@ -276,14 +307,8 @@ router.post('/photos/batch-delete', authMiddleware, async (req, res) => {
     return res.status(400).json({ code: 400, message: '所选照片不存在或已在回收站' })
   }
   // 若被删照片恰是所属相册封面，回退封面，避免死链
-  const albumSet = new Set(deleted.map(p => p.album_id))
-  for (const albumId of albumSet) {
-    const album = db.findAlbum(albumId)
-    if (!album) continue
-    if (deleted.some(p => p.album_id === albumId && album.cover === p.url)) {
-      const rest = db.getPhotosByAlbum(albumId)
-      await db.updateAlbum(albumId, { cover: rest.length > 0 ? (rest[0].thumb || rest[0].url) : '' })
-    }
+  for (const albumId of new Set(deleted.map(p => p.album_id))) {
+    await resetAlbumCoverIfNeeded(albumId, deleted.filter(p => p.album_id === albumId))
   }
   res.json({ code: 200, message: `已将 ${deleted.length} 张照片移入回收站`, data: { count: deleted.length } })
 })
@@ -311,6 +336,9 @@ router.delete('/photos/:id/purge', authMiddleware, photoIdParam, async (req, res
     return res.status(400).json({ code: 400, message: '请先移入回收站，再彻底删除' })
   }
   const photo = await db.purgePhoto(id)
+  // 兜底：这里是物理文件真正被删除的环节，万一封面在软删除阶段没能正确重置
+  // （例如改动前遗留的历史数据），封面就会永久指向一个已不存在的文件。
+  await resetAlbumCoverIfNeeded(photo.album_id, photo)
   try {
     await removePhotoFiles(photo)
   } catch (err) {

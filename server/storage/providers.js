@@ -139,6 +139,51 @@ class CosAdapter {
 }
 
 /**
+ * 七牛存储区域别名 → SDK 的 Zone 类。
+ * 用户填「华东-浙江」「cn-east-1」「z0」都指向同一个区域，这里统一归一化。
+ */
+const KODO_ZONE_ALIASES = {
+  z0: 'Zone_z0',
+  cneast1: 'Zone_z0',
+  z1: 'Zone_z1',
+  cnnorth1: 'Zone_z1',
+  z2: 'Zone_z2',
+  cnsouth1: 'Zone_z2',
+  z2p: 'Zone_cn_east_2',
+  cneast2: 'Zone_cn_east_2',
+  na0: 'Zone_na0',
+  usnorth1: 'Zone_na0',
+  as0: 'Zone_as0',
+  apsoutheast1: 'Zone_as0',
+}
+
+/**
+ * 构造七牛 SDK 的 Config。
+ *
+ * 关键点：显式指定 zone 能让 SDK 跳过「查询存储区域」这一步
+ * （见 qiniu/conf.js 的 getRegionsProviderFromZone —— 有 zone 就直接构造 Region，
+ * 不再请求 /v4/query）。这既省掉一次网络往返，也规避了一个真实故障：
+ * 区域查询失败时，SDK 会抛出它自己回调风格 API 没能接住的 Promise 拒绝，
+ * 在 Node 15+ 下会直接终止整个进程 —— 表现为「一次上传失败，服务整体挂掉」。
+ *
+ * 未填写或无法识别区域时保持默认行为（走区域查询），
+ * 此时由 index.js 中的 unhandledRejection 兜底保证进程不退出。
+ *
+ * @param {object} config - 解密后的七牛配置
+ * @returns {object} qiniu.conf.Config 实例
+ */
+function createKodoConfig(config) {
+  const qiniu = require('qiniu')
+  const conf = new qiniu.conf.Config()
+  const normalized = String(config.region || '').trim().toLowerCase().replace(/[\s_-]/g, '')
+  const zoneName = KODO_ZONE_ALIASES[normalized]
+  if (zoneName && qiniu.zone[zoneName]) {
+    conf.zone = qiniu.zone[zoneName]
+  }
+  return conf
+}
+
+/**
  * 七牛云 Kodo 适配器
  */
 class KodoAdapter {
@@ -154,7 +199,7 @@ class KodoAdapter {
     }
     const putPolicy = new qiniu.rs.PutPolicy(options)
     const uploadToken = putPolicy.uploadToken(mac)
-    const formUploader = new qiniu.form_up.FormUploader()
+    const formUploader = new qiniu.form_up.FormUploader(createKodoConfig(this.config))
     const putExtra = new qiniu.form_up.PutExtra()
 
     return new Promise((resolve, reject) => {
@@ -173,7 +218,7 @@ class KodoAdapter {
     try {
       const qiniu = require('qiniu')
       const mac = new qiniu.auth.digest.Mac(this.config.accessKey, this.config.secretKey)
-      const bucketManager = new qiniu.rs.BucketManager(mac)
+      const bucketManager = new qiniu.rs.BucketManager(mac, createKodoConfig(this.config))
       await new Promise((resolve, reject) => {
         bucketManager.listPrefix(
           this.config.bucket,
@@ -194,7 +239,7 @@ class KodoAdapter {
   async delete(key) {
     const qiniu = require('qiniu')
     const mac = new qiniu.auth.digest.Mac(this.config.accessKey, this.config.secretKey)
-    const bucketManager = new qiniu.rs.BucketManager(mac)
+    const bucketManager = new qiniu.rs.BucketManager(mac, createKodoConfig(this.config))
     return new Promise((resolve, reject) => {
       bucketManager.delete(this.config.bucket, key, (err, respBody, respInfo) => {
         if (err) return reject(err)
@@ -228,4 +273,4 @@ function createAdapter(provider, config) {
   return new AdapterClass(config)
 }
 
-module.exports = { createAdapter, ADAPTER_MAP }
+module.exports = { createAdapter, ADAPTER_MAP, createKodoConfig }

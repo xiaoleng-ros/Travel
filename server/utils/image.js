@@ -31,6 +31,50 @@ function detectImageFormat(buffer) {
   return null
 }
 
+/**
+ * 读取照片的拍摄时间（EXIF DateTimeOriginal）。
+ *
+ * 注意这里刻意不用 exifr 的默认日期解析：EXIF 的时间字符串本身不带时区，
+ * 默认解析会把它当作 UTC，导致东八区拍摄的照片回显时整整早 8 小时。
+ * 因此用 reviveValues:false 取原始字符串自行转换，全程不做时区换算，
+ * 得到的即「拍摄当地的时间」，也正是回忆录按时间线展示时想要的语义。
+ *
+ * 入参约定为 Buffer（也兼容文件路径）。之所以推荐传 Buffer：exifr 按路径读取时
+ * 会开启文件流，在 Windows 上可能来不及释放句柄，导致上传临时文件删不掉。
+ *
+ * @param {Buffer|string} source - 图片数据（调用方应优先传 Buffer）
+ * @returns {Promise<string|null>} "YYYY-MM-DDTHH:mm:ss"，无有效拍摄信息时返回 null
+ */
+async function readCaptureTime(source) {
+  try {
+    const exifr = require('exifr')
+    const tags = await exifr.parse(source, {
+      pick: ['DateTimeOriginal', 'CreateDate'],
+      reviveValues: false,
+      translateValues: false,
+    })
+    const raw = tags?.DateTimeOriginal || tags?.CreateDate
+    if (typeof raw !== 'string') return null
+
+    const matched = raw.trim().match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/)
+    if (!matched) return null
+
+    const [, year, month, day, hour, minute, second] = matched
+    // 相机时间未校准时会写入 0000:00:00 之类的非法值，直接丢弃，避免污染时间线
+    if (
+      Number(year) < 1900 ||
+      Number(month) < 1 || Number(month) > 12 ||
+      Number(day) < 1 || Number(day) > 31 ||
+      Number(hour) > 23 || Number(minute) > 59 || Number(second) > 60
+    ) {
+      return null
+    }
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}`
+  } catch {
+    return null
+  }
+}
+
 // 展示用主图的最长边
 const MAX_DISPLAY_SIZE = 2048
 
@@ -52,8 +96,14 @@ async function processUploadedImageToBuffer(srcPath) {
     return null
   }
 
-  // 原始字节，用于单独保存「原图」（不重编码、不压缩）
+  // 一次性读入内存，后续 sharp 与 exifr 都基于这份 Buffer 工作。
+  // 不让它们直接读文件路径：在 Windows 上二者都可能短暂持有文件句柄，
+  // 导致上传临时文件删不掉（EPERM），只能等下次启动才兜底清理。
   const originalBuffer = fs.readFileSync(srcPath)
+
+  // 拍摄时间必须在重编码前读取 —— sharp 的输出会丢弃 EXIF，
+  // 处理完再读就拿不到拍摄时间了。
+  const takenAt = await readCaptureTime(originalBuffer)
 
   // 动图：sharp 重编码 GIF 只会保留首帧，因此直接沿用原文件以保持动画
   if (format === 'gif') {
@@ -68,6 +118,7 @@ async function processUploadedImageToBuffer(srcPath) {
           width: meta.width || 4,
           height: meta.height || 3,
           animated: true,
+          takenAt,
         }
       }
     } catch (err) {
@@ -76,7 +127,8 @@ async function processUploadedImageToBuffer(srcPath) {
   }
 
   // 使用 sharp 处理：限制像素、剥离元数据（sharp 默认不回写 EXIF/ICC）、压缩，输出 Buffer
-  const { data, info } = await sharp(srcPath, {
+  // 输入用 Buffer 而非文件路径，避免 sharp 持有文件句柄（见上方说明）
+  const { data, info } = await sharp(originalBuffer, {
     limitInputPixels: 64000000, // 8000 * 8000，防止超大图解压炸弹
   })
     .rotate()
@@ -97,32 +149,55 @@ async function processUploadedImageToBuffer(srcPath) {
     width: info.width || 4,
     height: info.height || 3,
     animated: false,
+    takenAt,
   }
 }
 
+// 缩略图最长边。瀑布流列宽约 300-400px，取 640 可在高分屏下保持清晰；
+// 由于统一转成 WebP，文件反而比原先 480px 的同格式缩略图更小。
+const THUMB_SIZE = 640
+
 /**
- * 从已处理的图片 Buffer 生成小尺寸缩略图
- * 动图会尽量保留动画，失败时回退为静态首帧
+ * 生成缩略图，统一输出 WebP。
+ *
+ * 背景：此前缩略图沿用原图格式，PNG 照片的缩略图动辄几百 KB，
+ * 而它恰恰是瀑布流里请求量最大的资源。转 WebP 后同一张图通常能小六成以上，
+ * 走 CDN 时直接体现为流量与加载时间下降。
+ *
+ * 注意返回 ext：扩展名已不再等同于原图格式，调用方必须用正确的后缀保存，
+ * 否则文件内容与扩展名不符，静态服务会给出错误的 Content-Type。
+ *
  * @param {Buffer} buffer - 已处理的图片 Buffer
- * @param {string} format - 图片格式（jpeg/png/webp/gif/avif/bmp）
- * @returns {Promise<Buffer>} 缩略图 Buffer
+ * @param {string} format - 原始图片格式，用于判断是否为动图
+ * @returns {Promise<{buffer: Buffer, ext: string}>}
  */
 async function processThumbnail(buffer, format) {
   const sharp = require('sharp')
   const animated = format === 'gif'
+  const resizeOptions = { width: THUMB_SIZE, height: THUMB_SIZE, fit: 'inside', withoutEnlargement: true }
+
   try {
-    return await sharp(buffer, { limitInputPixels: 64000000, animated })
-      .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
-      .toFormat(format, { quality: format === 'png' ? undefined : 80, animated })
+    // 动图尽量保留动画（WebP 支持动画）
+    const data = await sharp(buffer, { limitInputPixels: 64000000, animated })
+      .resize(resizeOptions)
+      .webp({ quality: 78, effort: 4 })
       .toBuffer()
+    return { buffer: data, ext: '.webp' }
   } catch (err) {
-    // 动图缩略失败时退化为静态首帧，不阻断上传
+    // 动图转 WebP 失败时退化为静态首帧，不阻断上传
     if (!animated) throw err
-    return sharp(buffer, { limitInputPixels: 64000000 })
-      .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
-      .toFormat(format)
+    const data = await sharp(buffer, { limitInputPixels: 64000000 })
+      .resize(resizeOptions)
+      .webp({ quality: 78 })
       .toBuffer()
+    return { buffer: data, ext: '.webp' }
   }
 }
 
-module.exports = { detectImageFormat, processUploadedImageToBuffer, processThumbnail, ALLOWED_FORMATS }
+module.exports = {
+  detectImageFormat,
+  readCaptureTime,
+  processUploadedImageToBuffer,
+  processThumbnail,
+  ALLOWED_FORMATS,
+}
