@@ -101,9 +101,17 @@ function isSafeFilename(filename) {
 
 const ALLOWED_EXT = /\.(jpe?g|png|gif|webp|bmp|avif)$/i
 
-/** base64url（无填充），七牛签名与 entry 编码使用 */
+/**
+ * base64url 编码，供七牛签名与 entry 编码使用。
+ *
+ * ⚠️ 必须**保留 `=` 填充**：七牛要求的是「只把 +/ 换成 -_」的 urlsafe base64，
+ * 官方 SDK 的 base64ToUrlSafe 也是这么做的（不删 `=`）。
+ * 若照 JWT 的习惯剥掉填充，七牛会一律返回 `401 {"error":"bad token"}`，
+ * 表现为上传凭证、删除对象全部失败，且错误信息具有误导性（像是密钥不对）。
+ * 2026-09-22 用官方 SDK 交叉验证确认：去掉 `=` → 401，保留 `=` → 正常。
+ */
 function b64url(input) {
-  return Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_')
 }
 
 /** 解析 EXIF 拍摄时间字符串（"2024:05:03 14:30:00"）为 "2024-05-03T14:30:00"，非法返回 null */
