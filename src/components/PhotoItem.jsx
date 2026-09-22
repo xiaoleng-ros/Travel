@@ -47,7 +47,21 @@ export default function PhotoItem({ photo, index, hoveredId, onHoverStart, onHov
       onHoverStart={() => onHoverStart(photo.id)}
       onHoverEnd={onHoverEnd}
       onClick={handleClick}
-      className="relative overflow-hidden cursor-pointer group photo-item rounded-xl"
+      // 此前只有 onClick：卡片不可聚焦，键盘用户无法打开灯箱 —— 而这是前台最核心的交互
+      role="button"
+      tabIndex={0}
+      aria-label={displayTitle || '查看照片'}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          handleClick()
+        }
+      }}
+      className={`relative overflow-hidden cursor-pointer group photo-item rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+        isDark
+          ? 'focus-visible:ring-white/60 focus-visible:ring-offset-[#1a1a1a]'
+          : 'focus-visible:ring-[#1a1a1a]/40 focus-visible:ring-offset-[#faf9f6]'
+      }`}
       style={{
         width: '100%',
         height: '100%',

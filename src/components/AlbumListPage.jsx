@@ -27,6 +27,9 @@ export default function AlbumListPage() {
   const [imgLoading, setImgLoading] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState('')
   const loadingRef = useRef(false)
+  // 灯箱关闭动画的定时器。必须持有它才能取消：
+  // 否则「关闭后 300ms 内点开另一张」时，上一个定时器会把新打开的灯箱清成 null。
+  const closeTimerRef = useRef(null)
 
   const hasMore = photos.length < total
 
@@ -72,6 +75,11 @@ export default function AlbumListPage() {
   }
 
   const openLightbox = async (photo) => {
+    // 上一次关闭动画可能还没结束，先取消它，避免它把这次打开的灯箱清掉
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
     const idx = photos.findIndex((p) => p.id === photo.id)
     const src = photo.original_url || photo.url
     setLightboxPhoto(photo)
@@ -100,12 +108,19 @@ export default function AlbumListPage() {
 
   const closeLightbox = () => {
     setLightboxOpen(false)
-    setTimeout(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null
       setLightboxPhoto(null)
       setLightboxSrc('')
       setLightboxIndex(null)
     }, 300)
   }
+
+  // 组件卸载时清掉未触发的定时器，避免对已卸载组件 setState
+  useEffect(() => () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+  }, [])
 
   useEffect(() => {
     const onKey = (e) => {

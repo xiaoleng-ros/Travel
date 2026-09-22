@@ -9,9 +9,9 @@ const AdminLayout = lazy(() => import('./admin/AdminLayout'))
 const AdminDashboard = lazy(() => import('./admin/AdminDashboard'))
 const AlbumManage = lazy(() => import('./admin/AlbumManage'))
 const PhotoManage = lazy(() => import('./admin/PhotoManage'))
-const StorageSettings = lazy(() => import('./admin/StorageSettings'))
 const ChangePassword = lazy(() => import('./admin/ChangePassword'))
 const RecycleBin = lazy(() => import('./admin/RecycleBin'))
+const NotFound = lazy(() => import('./components/NotFound'))
 
 function RouteFallback() {
   return (
@@ -34,10 +34,12 @@ export default function App() {
               <Route index element={<AdminDashboard />} />
               <Route path="albums" element={<AlbumManage />} />
               <Route path="albums/:id" element={<PhotoManage />} />
-              <Route path="storage" element={<StorageSettings />} />
               <Route path="trash" element={<RecycleBin />} />
               <Route path="change-password" element={<ChangePassword />} />
             </Route>
+
+            {/* 未匹配的路径（含拼错的链接）统一落到 404，避免白屏 */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

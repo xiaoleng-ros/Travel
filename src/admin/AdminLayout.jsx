@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router'
 import { motion } from 'motion/react'
-import { GridFour, ImageSquare, Cloud, SignOut, Key, Trash } from '@phosphor-icons/react'
+import { GridFour, ImageSquare, SignOut, Key, Trash } from '@phosphor-icons/react'
 import { adminLogout } from '../api/real'
 
+// 存储配置不再是运行时功能：EdgeOne 部署下七牛凭证来自环境变量，
+// 改动需在平台重新配置，因此移除「对象存储」入口
 const navItems = [
   { path: '/admin', label: '概览', icon: GridFour },
   { path: '/admin/albums', label: '相册管理', icon: ImageSquare },
   { path: '/admin/trash', label: '回收站', icon: Trash },
-  { path: '/admin/storage', label: '对象存储', icon: Cloud },
   { path: '/admin/change-password', label: '修改密码', icon: Key },
 ]
 

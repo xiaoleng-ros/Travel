@@ -163,6 +163,7 @@ export default function PhotoManage() {
   const [photos, setPhotos] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [editTarget, setEditTarget] = useState(null)
@@ -176,20 +177,25 @@ export default function PhotoManage() {
   const [sortDragIndex, setSortDragIndex] = useState(null)
   const [sortOverIndex, setSortOverIndex] = useState(null)
   const fileRef = useRef(null)
+  // 请求序号：切换相册或上传后重新拉取时，忽略尚未返回的旧请求结果，
+  // 避免慢的旧响应把新相册的照片列表覆盖掉
+  const loadSeqRef = useRef(0)
 
   const fetchData = async () => {
+    const seq = ++loadSeqRef.current
     setLoading(true)
     try {
       const [albumRes, photoRes] = await Promise.all([
         getAdminAlbum(Number(id)),
         getAdminPhotos(Number(id)),
       ])
+      if (seq !== loadSeqRef.current) return
       if (albumRes.code === 200) setAlbum(albumRes.data)
       if (photoRes.code === 200) setPhotos(photoRes.data)
     } catch (err) {
       console.error(err)
     } finally {
-      setLoading(false)
+      if (seq === loadSeqRef.current) setLoading(false)
     }
   }
 
@@ -204,13 +210,26 @@ export default function PhotoManage() {
     }
     setError('')
     setUploading(true)
+    setUploadProgress(null)
     try {
-      const res = await uploadPhotos(Number(id), files)
-      if (res.code === 200) fetchData()
+      const res = await uploadPhotos(Number(id), files, {
+        onProgress: (p) => setUploadProgress(p),
+      })
+      if (res.code === 200) {
+        fetchData()
+        // 部分失败要明确说出来，不能因为整体成功就静默略过
+        if (res.failed?.length) {
+          const first = res.failed[0]
+          setError(`${res.failed.length} 张上传失败，例如「${first.name}」：${first.message}`)
+        }
+      } else {
+        setError(res?.message || '上传失败，请稍后重试')
+      }
     } catch (e) {
       setError(e?.message || '上传失败，请稍后重试')
     } finally {
       setUploading(false)
+      setUploadProgress(null)
       if (fileRef.current) fileRef.current.value = ''
     }
   }
@@ -418,7 +437,12 @@ export default function PhotoManage() {
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
                 <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
               </svg>
-              <p className="text-[14px] text-[#787168] font-medium">正在上传照片...</p>
+              <p className="text-[14px] text-[#787168] font-medium">
+                正在上传照片{uploadProgress ? `（${uploadProgress.current}/${uploadProgress.total}）` : '...'}
+              </p>
+              {uploadProgress?.name && (
+                <p className="text-[12px] text-[#a8a098] truncate max-w-xs mx-auto">{uploadProgress.name}</p>
+              )}
               <div className="max-w-xs mx-auto h-1.5 rounded-full bg-[#f0ece4] overflow-hidden">
                 <motion.div
                   className="h-full rounded-full bg-gradient-to-r from-[#fef3c7] to-[#d97706]"

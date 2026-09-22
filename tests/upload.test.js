@@ -46,3 +46,11 @@ test('一批文件中只要有一个不合法就整体拒绝', () => {
   const result = validateUploadFiles(files)
   assert.match(result, /bad\.tiff/)
 })
+
+test('超过服务端凭证签发上限（20 张）的批次被整体拒绝', () => {
+  const files = Array.from({ length: 21 }, (_, i) => ok(`p${i}.jpg`))
+  const result = validateUploadFiles(files)
+  assert.match(result, /最多上传 20 张/)
+  // 边界：恰好 20 张应通过
+  assert.equal(validateUploadFiles(files.slice(0, 20)), null)
+})

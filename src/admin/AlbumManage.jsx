@@ -148,7 +148,7 @@ function CreateAlbumModal({ onClose, onCreated }) {
   )
 }
 
-function DeleteConfirmModal({ albumName, onClose, onConfirm }) {
+function DeleteConfirmModal({ albumName, onClose, onConfirm, error, loading }) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -174,18 +174,21 @@ function DeleteConfirmModal({ albumName, onClose, onConfirm }) {
             确定要删除「{albumName}」吗？<br />
             所有照片也将被删除，此操作不可撤销。
           </p>
+          {error && <p className="text-[12px] text-red-500 mt-3">{error}</p>}
         </div>
         <div className="flex gap-2 mt-6">
           <button
             onClick={onConfirm}
-            className="flex-1 h-10 flex items-center justify-center gap-2 rounded-lg bg-red-500 text-white text-[13px] font-medium transition-all duration-150 hover:bg-red-600 active:scale-[0.98]"
+            disabled={loading}
+            className="flex-1 h-10 flex items-center justify-center gap-2 rounded-lg bg-red-500 text-white text-[13px] font-medium transition-all duration-150 hover:bg-red-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Trash size={14} />
-            确认删除
+            {loading ? '删除中…' : '确认删除'}
           </button>
           <button
             onClick={onClose}
-            className="flex-1 h-10 rounded-lg border border-[#e7e2d8] text-[#787168] text-[13px] font-medium transition-all duration-150 hover:bg-[#f7f5f1]"
+            disabled={loading}
+            className="flex-1 h-10 rounded-lg border border-[#e7e2d8] text-[#787168] text-[13px] font-medium transition-all duration-150 hover:bg-[#f7f5f1] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             取消
           </button>
@@ -200,6 +203,8 @@ export default function AlbumManage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const navigate = useNavigate()
 
   const fetchAlbums = () => {
@@ -213,11 +218,23 @@ export default function AlbumManage() {
   useEffect(() => { fetchAlbums() }, [])
 
   const handleDelete = async () => {
-    if (!deleteTarget) return
-    const res = await deleteAlbum(deleteTarget.id)
-    if (res.code === 200) {
-      setDeleteTarget(null)
-      fetchAlbums()
+    if (!deleteTarget || deleting) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const res = await deleteAlbum(deleteTarget.id)
+      if (res.code === 200) {
+        setDeleteTarget(null)
+        fetchAlbums()
+      } else {
+        setDeleteError(res?.message || '删除失败')
+      }
+    } catch (err) {
+      // 原先这里没有错误处理：接口失败时 Promise 被拒绝，弹窗既不关闭也不给任何提示。
+      // 而删除相册会连带删掉其下所有照片，用户很容易误以为已经删掉了。
+      setDeleteError(err?.message || '删除失败，请稍后重试')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -347,7 +364,9 @@ export default function AlbumManage() {
         {deleteTarget && (
           <DeleteConfirmModal
             albumName={deleteTarget.name}
-            onClose={() => setDeleteTarget(null)}
+            error={deleteError}
+            loading={deleting}
+            onClose={() => { setDeleteTarget(null); setDeleteError('') }}
             onConfirm={handleDelete}
           />
         )}

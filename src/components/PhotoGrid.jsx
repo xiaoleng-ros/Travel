@@ -40,23 +40,32 @@ export default function PhotoGrid({ photos, onPhotoClick, onReachEnd, hasMore = 
     [containerWidth]
   )
 
+  // 用 ref 持有最新的 onReachEnd：父组件每次渲染都会传入新的函数引用，
+  // 若把它放进依赖数组，滚动监听会被反复解绑重绑、并在每次绑定后立即触发一次触底检测，
+  // 滚动过程中可能连续触发加载更多。
+  const onReachEndRef = useRef(onReachEnd)
+  useEffect(() => {
+    onReachEndRef.current = onReachEnd
+  }, [onReachEnd])
+
   // 整页滚动：监听 window 滚动，Hero 等内容随文档一起滚走
   useEffect(() => {
     let ticking = false
+    let rafId = 0
     const onScroll = () => {
       if (ticking) return
       ticking = true
-      requestAnimationFrame(() => {
+      rafId = requestAnimationFrame(() => {
         ticking = false
         const el = containerRef.current
         if (!el) return
         setScrollTop(window.scrollY)
-        if (!onReachEnd || !hasMore || isLoadingMore) return
+        if (!onReachEndRef.current || !hasMore || isLoadingMore) return
         // 触底检测：网格底部（文档坐标）进入视口底部 600px 内即加载更多
         const rect = el.getBoundingClientRect()
         const gridBottomDoc = rect.top + window.scrollY + rect.height
         if (window.scrollY + window.innerHeight > gridBottomDoc - 600) {
-          onReachEnd()
+          onReachEndRef.current()
         }
       })
     }
@@ -64,9 +73,10 @@ export default function PhotoGrid({ photos, onPhotoClick, onReachEnd, hasMore = 
     onScroll()
     return () => {
       window.removeEventListener('scroll', onScroll)
-      if (ticking) cancelAnimationFrame(0)
+      // 取消尚未执行的那一帧，否则组件卸载后回调仍会跑一次
+      if (rafId) cancelAnimationFrame(rafId)
     }
-  }, [onReachEnd, hasMore, isLoadingMore])
+  }, [hasMore, isLoadingMore])
 
   const getRatio = useCallback((photo) => {
     if (ratios[photo.id]) return ratios[photo.id]
