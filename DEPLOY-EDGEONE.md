@@ -12,7 +12,7 @@
 
 ```
                     ┌──────────────────────────────────────────┐
-   访客 / 后台  ───▶ │         EdgeOne Pages（海外节点）          │
+   访客 / 后台  ───▶ │         EdgeOne Pages（东京）           │
                     │                                          │
                     │  ① 静态托管 ← React 前端（Vite 构建产物）   │
                     │  ② Cloud Functions (Node.js 20)          │
@@ -35,6 +35,11 @@
 
 **核心设计**：图片由**浏览器直接上传到七牛**，不经过 EdgeOne 函数——
 这是绕开 Cloud Functions 请求体上限（6MB）的唯一方式。
+
+**区域选择**：函数部署在**东京（`ap-tokyo`）**，与 Turso 数据库同城。
+原因见第八节第 1 步——函数唯一的高频外部依赖是数据库，
+而七牛桶虽在新加坡，函数与它之间只有「彻底删除」时才发生一次调用。
+原先配的 `ap-singapore` 会让每次数据库读写都跨国往返，已改掉。
 
 ---
 
@@ -193,13 +198,22 @@ npm run dev
 1. **建 Turso 数据库**
    ```bash
    # 安装 CLI 后（或直接在 Turso 控制台创建）
-   # location 必须指定新加坡（sin），与 EdgeOne 函数、七牛桶同区；
-   # 不指定的话可能默认建在欧美，每个 API 请求都要跨洋一次
-   turso db create photo-memoir --location sin
+   # location 指定东京（nrt），与 EdgeOne 函数部署区 ap-tokyo 同城
+   turso db create photo-memoir --location nrt
    turso db show photo-memoir --url         # 得到 libsql:// 连接串
    turso db tokens create photo-memoir      # 得到访问令牌
    ```
    > 建表不用管，函数启动时会自动执行。
+   >
+   > ⚠️ **区域选择说明（2026-09-22 实测更正）**：本指南早期版本写「必须指定新加坡」，
+   > 但实测账号下**可选区域只有东京，其余均在美国**——新加坡建不了。
+   > 因此改为**把 EdgeOne 函数也部署到东京**（`overseasRegions: ["ap-tokyo"]`）来实现同区。
+   >
+   > 判断依据：函数唯一的高频外部依赖就是 Turso。
+   > 签发上传凭证是纯本地 HMAC 签名、不产生任何网络请求；
+   > 图片上传由浏览器直传七牛、展示走 CDN，都不经过函数；
+   > 只有「彻底删除」才会请求一次 `rs.qiniuapi.com`（低频，延迟不敏感）。
+   > 所以函数与**数据库**同区，比与七牛桶同区更有价值。
    >
    > Turso 中的数据现在是照片元数据的**唯一副本**（旧版的本地备份机制已不存在），
    > 建库后到 Turso 控制台确认自动备份/时点恢复已开启。
@@ -214,7 +228,8 @@ npm run dev
    - 连接 Git 仓库，构建命令 `npm run build`，输出目录 `dist`
    - 确认构建环境 **Node ≥ 20**（Vite 6 / React Router 8 的要求），不支持时用 `NODE_VERSION` 类变量指定
    - 配置第六节列出的环境变量
-   - 确认 `edgeone.json` 中的 `overseasRegions` 为 `ap-singapore`（与 Turso、七牛同区）
+   - 确认 `edgeone.json` 中的 `overseasRegions` 为 `ap-tokyo`
+     （**与 Turso 同区**，原因见第八节第 1 步的区域说明；七牛桶在新加坡不影响函数）
 
 4. **推送部署** —— 代码推送到远端仓库即自动构建发布
 
@@ -249,6 +264,8 @@ npm run dev
 | 冷启动耗时 | 首次请求需建表 + 连数据库，比后续请求慢；`maxDuration: 60` 已留足余量 |
 | imageView2 对海外桶的处理 | 本地无法验证七牛海外区域的实时处理行为；部署后按第九节「缩略图正常显示」一条确认 |
 | 限流生效范围 | `express-rate-limit` 为实例内存计数，Serverless 多实例下是**尽力而为**的保护，不能当成强约束 |
+| 函数实际运行区域 | `edgeone.json` 已配 `ap-tokyo`。按官方文档，**`edgeone.json` 的地域配置优先级高于控制台**，但控制台里若残留 `ap-singapore` 容易看错——部署后确认函数区域确为东京 |
+| 函数↔Turso 实际延迟 | 同城应为个位数毫秒。部署后可在日志里看一眼单次查询耗时，若仍高于 ~50ms 说明区域没生效 |
 
 ---
 
