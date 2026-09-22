@@ -190,12 +190,14 @@ Travel/
 
 **EdgeOne 版**（图片不经过服务器）：
 
-- 上传：浏览器直传七牛 Kodo，服务端只签发限定 key 的凭证
+- 上传：**浏览器先压缩**（`src/utils/compress.js`，最长边 2048 / 质量 85，与旧版 sharp 一致），
+  再直传七牛 Kodo，服务端只签发限定 key 的凭证
 - 展示图 / 缩略图：由七牛 `imageView2` 实时处理并经 CDN 缓存
   - 展示图 `?imageView2/2/w/2048/h/2048/q/85`
   - 缩略图 `?imageView2/2/w/640/h/640/q/80/format/webp`
   - **GIF 展示图用原文件**（imageView2 会丢弃动画）
-- 宽高与拍摄时间：浏览器端读取（`src/utils/photoMeta.js`）
+- 宽高取自压缩结果；拍摄时间由浏览器读原始文件的 EXIF（`src/utils/photoMeta.js`）
+- 直传失败会**自动重试 3 次**（跨国链路连接成功率低，一次不成就放弃体验太差）
 - 单张上传上限 20MB，单次最多 20 张（由七牛凭证的 `fsizeLimit` 服务端强制）
 
 **旧版**（服务端处理）：主图压缩到 2048px、缩略图 640px WebP 独立文件、剥离 EXIF、限 8000×8000 防解压炸弹。

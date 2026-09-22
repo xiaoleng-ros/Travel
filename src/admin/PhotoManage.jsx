@@ -438,7 +438,8 @@ export default function PhotoManage() {
                 <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
               </svg>
               <p className="text-[14px] text-[#787168] font-medium">
-                正在上传照片{uploadProgress ? `（${uploadProgress.current}/${uploadProgress.total}）` : '...'}
+                {uploadProgress?.phase === 'compress' ? '正在压缩照片' : '正在上传照片'}
+                {uploadProgress ? `（${uploadProgress.current}/${uploadProgress.total}）` : '...'}
               </p>
               {uploadProgress?.name && (
                 <p className="text-[12px] text-[#a8a098] truncate max-w-xs mx-auto">{uploadProgress.name}</p>
