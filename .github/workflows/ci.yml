@@ -30,7 +30,7 @@ jobs:
       - name: 云函数语法检查
         run: |
           node --check "cloud-functions/api/[[default]].js"
-          node --check cloud-functions/dev-server.mjs
+          node --check scripts/dev-server.mjs
 
   server:
     name: 后端 · 测试

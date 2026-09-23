@@ -291,6 +291,29 @@ const SCHEMA = [
 
 const PHOTO_ORDER = `CASE WHEN sort_order IS NULL THEN 1 ELSE 0 END ASC, sort_order ASC, COALESCE(taken_at, create_time) DESC`
 
+/**
+ * 生成随机初始密码，避免硬编码弱口令（如 123456）。
+ * 保证同时含大小写字母、数字和特殊字符，避免被登录/修改密码的强度校验卡住。
+ * 使用 crypto.randomInt 保证密码学安全的随机数。
+ */
+function generateInitialPassword() {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const lower = 'abcdefghijkmnpqrstuvwxyz'
+  const digits = '23456789'
+  const special = '!@#$%^&*()-_=+'
+  const all = upper + lower + digits + special
+  const pick = (set) => set[crypto.randomInt(set.length)]
+  const required = [pick(upper), pick(lower), pick(digits), pick(special)]
+  const rest = Array.from({ length: 12 }, () => pick(all))
+  const chars = [...required, ...rest]
+  // Fisher-Yates 洗牌，避免固定前缀暴露字符类型分布
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1)
+    ;[chars[i], chars[j]] = [chars[j], chars[i]]
+  }
+  return chars.join('')
+}
+
 async function initDb() {
   const mod = await import(IS_REMOTE_DB ? '@libsql/client/web' : '@libsql/client')
   // libSQL 0.14+ 的 createClient 只接受对象形式的配置
@@ -303,7 +326,7 @@ async function initDb() {
 
   const { rows } = await db.execute('SELECT COUNT(*) AS c FROM users')
   if (Number(rows[0]?.c) === 0) {
-    const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || '123456'
+    const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || generateInitialPassword()
     try {
       await db.execute({
         sql: 'INSERT INTO users (username, password, nickname) VALUES (?, ?, ?)',
@@ -311,7 +334,11 @@ async function initDb() {
         // 这样前端无论发明文（curl）还是发哈希（网页），都能校验通过
         args: ['admin', bcrypt.hashSync(clientHash(initialPassword), 10), '管理员'],
       })
-      console.log(`[init] 已创建默认管理员 admin（初始密码来自 ADMIN_INITIAL_PASSWORD${process.env.ADMIN_INITIAL_PASSWORD ? '' : '，未设置时为 123456'}，请登录后修改）`)
+      if (process.env.ADMIN_INITIAL_PASSWORD) {
+        console.log('[init] 已创建默认管理员 admin（初始密码来自 ADMIN_INITIAL_PASSWORD，请登录后修改）')
+      } else {
+        console.log(`[init] 已创建默认管理员 admin\n初始密码：${initialPassword}\n请尽快登录并修改密码，或设置 ADMIN_INITIAL_PASSWORD 环境变量`)
+      }
     } catch {
       // 多实例冷启动并发插入时触发唯一约束，另一实例已创建，忽略
     }
