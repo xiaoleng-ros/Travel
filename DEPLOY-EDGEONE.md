@@ -155,9 +155,10 @@
 ```
 Travel/
 ├── src/                          # 前端（改动：上传链路、新增 photoMeta）
-├── cloud-functions/              # EdgeOne 后端
-│   ├── api/[[default]].js        #   Express 应用（单文件自包含）
-│   └── dev-server.mjs            #   本地开发入口（不参与线上部署）
+├── cloud-functions/              # EdgeOne 后端（⚠️ 目录内容会整体进入函数构建产物）
+│   └── api/[[default]].js        #   Express 应用（单文件自包含）
+├── scripts/
+│   └── dev-server.mjs            #   本地开发入口（npm run dev:api，不参与线上部署）
 ├── edgeone.json                  # EdgeOne 配置
 ├── .env.local.example            # 本地环境变量样板
 ├── dist/                         # 前端构建产物（EdgeOne 静态托管）
@@ -252,6 +253,8 @@ npm run dev
    - 配置第六节列出的环境变量
    - 确认 `edgeone.json` 中的 `overseasRegions` 为 `ap-tokyo`
      （**与 Turso 同区**，原因见第八节第 1 步的区域说明；七牛桶在新加坡不影响函数）
+     ⚠️ 该字段位于 `cloudFunctions` **直下**，不在 `cloudFunctions.nodejs` 里 ——
+     它与 `maxDuration` / `includeFiles` / `externalNodeModules` **不同级**，放错层级不会被识别
 
 4. **推送部署** —— 代码推送到远端仓库即自动构建发布
 
@@ -276,6 +279,10 @@ npm run dev
 
 本地已完成 **46 项端到端验证**（真实 Express + 真实 SQLite + 完整业务链路），
 但以下**属于 EdgeOne 平台集成行为，只能在真正部署后确认**：
+
+> **2026-09-23 首轮部署踩坑并已修复**：函数起初完全没被平台识别，`/api/*` 全部回落到静态页；
+> 按第十二节修正后重新部署，登录与全部读写接口均已实测通过。
+> 根因、判别方法与一条关于平台路由行为的新发现，见**第十二节**。
 
 | 待验证项 | 现状与应对 |
 |---------|-----------|
@@ -307,3 +314,105 @@ npm run dev
 
 **若要退回自托管方案**：前端与七牛直传链路可原样保留，
 只需把后端换回 `server/` 并把上传接口改回 multer 版本即可。
+
+---
+
+## 十二、踩坑记录：函数未被平台识别（2026-09-23）
+
+### 症状
+
+部署显示成功、前台页面正常，但 `/admin` 登录一律失败，提示「登录失败」。
+浏览器 Network 面板里能看到一组很有欺骗性的特征：
+
+| 观察 | 值 | 说明 |
+|------|-----|------|
+| `POST /api/admin/login` 状态码 | **200** | 密码错误时后端返回的是 **401**，200 本身就是异常信号 |
+| 响应 `Content-Type` | **text/html** | 接口不可能返回 HTML |
+| 响应大小 | **1.3 KB** | 与 `dist/index.html` 的 gzip 体积（1206 B）吻合 |
+| EdgeOne 控制台函数日志 | **空的** | 函数一次都没被调用 —— 这不是报错，是压根没执行 |
+
+前端 axios 拿到一坨 HTML，取 `res.code` 得到 `undefined`，于是走 else 分支显示「登录失败」。
+**所以这个问题跟账号密码完全无关**，用对了密码也一样登不上。
+
+### 一眼判别的方法（可复用）
+
+请求几个不同路径，**比较它们的 etag**：
+
+```bash
+curl -sI https://你的域名/api/health       | grep -i etag
+curl -sI https://你的域名/api/admin/login  | grep -i etag
+curl -sI https://你的域名/                 | grep -i etag
+```
+
+三个 etag 完全一致 ⇒ 都在返回同一个 `index.html` ⇒ **函数没有注册路由**，
+请求被「静态资源优先 + SPA 回退」接走了。
+
+还有一条更硬的判据：**用 `GET` 请求一个只注册了 `POST` 的接口**。
+如果请求真的进了 Express，末尾兜底逻辑会返回 `404 {"code":404,"message":"接口不存在"}`；
+如果返回的是 HTML，就说明它根本没进函数。
+
+### 根因与修正
+
+| # | 问题 | 修正 |
+|---|------|------|
+| 1 | 入口写的是 `export default createApp()` —— 一个**函数调用表达式**。官方文档要求「框架实例必须被导出」，示例为 `export default app;`。构建器靠**静态分析**识别入口，调用表达式可能识别不出，文件因此不被注册为路由 | 先赋给标识符：`const app = createApp()` + `export default app` |
+| 2 | `edgeone.json` 里 `overseasRegions` 被放进了 `cloudFunctions.nodejs` 内部 | 移到 `cloudFunctions` 直下（它与 `maxDuration` **不同级**） |
+| 3 | `dev-server.mjs` 放在 `cloud-functions/` 下，而该目录内容会整体进入函数构建产物，它却含 `app.listen()` | 移到 `scripts/dev-server.mjs`，`package.json` 的 `dev:api` 同步改路径 |
+
+### 官方约定（已核对 [Node.js 文档](https://edgeone.ai/document/187318055541846016)）
+
+- Express/Koa：**所有路由必须集中在一个文件**里，文件名必须是 `[[default]].js`
+- **框架实例必须导出**，否则构建器不会把它当作函数
+- **不要** `app.listen()`、不要自己起 HTTP Server
+- 辅助模块可以放在同目录，但只有导出 Handler（`onRequest*`）或框架实例的文件才会成为路由
+- 路由优先级：静态资源 > 精确路由 > `[param]` > `[[catch-all]]`
+
+### 顺带发现：本机代理端口是会变的
+
+此前记录的可用代理是 `127.0.0.1:51457`，本次已失效（`ECONNREFUSED`），
+实际可用的是 `9999`（git 配置里那个，此前提是"已关闭"，现在开着）。
+⇒ **推送前先探测端口，别硬编码**：
+
+```bash
+node -e "const n=require('net');[9999,51457,52111].forEach(p=>{const s=n.connect({host:'127.0.0.1',port:p});s.setTimeout(1200);s.on('connect',()=>{console.log(p,'开放');s.destroy()});s.on('error',()=>console.log(p,'不可用'));s.on('timeout',()=>{console.log(p,'超时');s.destroy()})})"
+```
+
+### 修复结果（2026-09-23 已验证）
+
+提交 `b524da7` 推送后 EdgeOne 自动重建，`/api/health` 于 **14:51:50** 起返回
+`{"status":"ok","time":"..."}`，`Content-Type: application/json`。随后带 cookie 走完整链路实测：
+
+| 接口 | 结果 |
+|------|------|
+| `POST /api/admin/login`（admin / 123456） | 200，`{"code":200,"message":"登录成功"}`，正确签发 `admin_token` |
+| `POST /api/admin/login`（错误密码） | 401，`{"code":401,"message":"用户名或密码错误"}` |
+| `GET /api/admin/me` | 200，`{"id":1,"username":"admin"}` |
+| `GET /api/admin/albums` | 200，`data: []` |
+| `GET /api/admin/photos/recent` / `trash` | 200，`data: []` |
+| `GET /api/album/public/list` / `/{id}/photos` | 200，正常 |
+
+> 三处改动同时提交，无法逐条归因；但**入口导出方式**是最可能起作用的那一处 ——
+> `overseasRegions` 层级与辅助模块位置通常不会导致「函数完全不注册路由」。
+
+### 顺带发现：平台会先按「已注册路由」做一层匹配
+
+修复后逐路径探测，发现一个**官方文档未提及、但实测稳定复现**的行为：
+
+| 请求路径 | 结果 |
+|----------|------|
+| `/api/health`（已注册） | **JSON** ✓ |
+| `/api/album/public/list`（已注册） | **JSON** ✓ |
+| `/api/admin/me`（已注册，未带 cookie） | **401 JSON** ✓ |
+| `/api/albums`（不存在） | **HTML**（SPA 回退） |
+| `/api/admin/nope`（不存在） | **HTML** |
+| `/api/zzz`（不存在） | **HTML** |
+
+即：**只有函数里真实注册过的路由才会被转发进来**；未注册的路径在平台层就被
+「静态资源 + SPA 回退」接走，根本到不了 Express。
+
+推断（未经官方文档确认）：构建器会静态解析 Express 的 `app.get / app.post / ...` 定义并据此建路由表。
+这很可能也正是「导出必须写成标识符」的原因 —— 构建器需要顺着导出值解析出完整路由清单。
+
+**实际影响**：函数末尾那段「未知 `/api` 路径返回 JSON 404」的兜底**永远不会触发**，
+未注册的接口路径会返回 HTML。前端若请求错路径，axios 拿到 HTML 会报「网络错误」
+而不是「接口不存在」。功能无碍，但排查时别被绕进去。
