@@ -6,6 +6,11 @@
  *  - 未配置 TURSO_DATABASE_URL 时默认使用本地 SQLite 文件 ./api-dev.db
  *  - 监听 3001 端口，与 Vite 的 /api 代理（vite.config.js）对应
  *
+ * ⚠️ 本文件刻意放在 scripts/ 而非 cloud-functions/：
+ *    cloud-functions/ 目录下的内容会整体进入 EdgeOne 的函数构建产物，
+ *    而这个文件里有 app.listen()，绝不该出现在 Serverless 运行时里，
+ *    放在那里既污染构建产物、也可能干扰构建器对函数入口的识别。
+ *
  * 生产环境不经过本文件——EdgeOne 直接加载 cloud-functions/api/[[default]].js。
  */
 import fs from 'node:fs'
@@ -34,7 +39,7 @@ if (!process.env.TURSO_DATABASE_URL) {
 process.env.NODE_ENV = process.env.NODE_ENV || 'development'
 
 // 入口文件名含 [[ ]]，必须转成 file URL 再动态导入
-const entryUrl = pathToFileURL(path.join(here, 'api', '[[default]].js')).href
+const entryUrl = pathToFileURL(path.join(root, 'cloud-functions', 'api', '[[default]].js')).href
 const { default: app } = await import(entryUrl)
 
 const PORT = Number(process.env.PORT) || 3001

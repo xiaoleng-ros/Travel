@@ -1,8 +1,8 @@
 {
   "cloudFunctions": {
+    "overseasRegions": ["ap-tokyo"],
     "nodejs": {
       "maxDuration": 60,
-      "overseasRegions": ["ap-tokyo"],
       "externalNodeModules": ["@libsql/client"],
       "includeFiles": ["dist/index.html"]
     }

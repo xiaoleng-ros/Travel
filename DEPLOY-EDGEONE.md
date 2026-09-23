@@ -173,16 +173,25 @@ Travel/
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `JWT_SECRET` | ✅ | 32 位以上随机串。缺失会导致函数启动即报错（快速暴露配置问题） |
+| `JWT_SECRET` | ✅ | 32 位以上随机串。**缺失或不足 32 位会导致函数启动即抛错**（故意设计成快速暴露配置问题）。生产务必用新生成的强随机值，别用本地开发那个弱值 |
 | `QINIU_CDN_DOMAIN` | ✅ | 图片访问域名，如 `https://img.iceuu.icu`。**缺失会启动报错** |
 | `TURSO_DATABASE_URL` | ✅ | Turso 连接串，形如 `libsql://xxx-yourorg.turso.io` |
-| `TURSO_AUTH_TOKEN` | ✅ | Turso 访问令牌 |
-| `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY` / `QINIU_BUCKET` | ✅ | 七牛凭证；缺失时「取上传凭证」接口会返回明确错误 |
-| `QINIU_REGION` | ⬜ | 存储区域，**新加坡为 `as0`**（默认值） |
-| `ADMIN_INITIAL_PASSWORD` | ⬜ | 首次启动创建管理员用，默认 `123456`，**上线后请立即在后台修改** |
-| `NODE_ENV` | ⬜ | 设为 `production`（Cookie 的 `secure` 标志依赖它） |
+| `TURSO_AUTH_TOKEN` | ✅ | Turso 访问令牌。不填也能启动，但连不上远程库 |
+| `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY` / `QINIU_BUCKET` | ✅ | 七牛凭证；缺失时「取上传凭证」接口会返回明确错误（不报启动错，但**上传功能整个废掉**） |
+| `NODE_ENV` | 🔸 建议 | 设为 `production`。影响两处：Cookie 加 `Secure` 标志；Express 不再把错误堆栈返回给客户端 |
+| `QINIU_REGION` | ⬜ | 存储区域，**新加坡为 `as0`**（默认值，本项目可省） |
+| `ADMIN_INITIAL_PASSWORD` | ⬜ | **仅在 `users` 表为空时生效**。库里已有管理员时填了也没用 |
 | `QINIU_UPLOAD_HOST` | ⬜ | 上传域名，一般由 `QINIU_REGION` 自动推导 |
 | `TRUST_PROXY_HOPS` | ⬜ | 反代跳数，默认 `1` |
+
+> ⚠️ **`TURSO_DATABASE_URL` 的隐藏陷阱**：代码里它**有默认值** `file:api-dev.db`，
+> 所以不填**不会报错**——但 Serverless 没有持久磁盘，数据会写进随实例销毁的临时沙箱，
+> 表现为「能登录、能传图，但过一会儿数据全没了」。**这个不报错的性质让它比报错更危险。**
+
+> **为什么密钥不能写进代码**：本仓库是 **public**。`JWT_SECRET` 泄露 = 他人可自行签发登录凭证
+> 直接进后台；`TURSO_AUTH_TOKEN` 与七牛 AK/SK 泄露 = 可读写全部数据、删除全部照片、烧光流量。
+> `QINIU_CDN_DOMAIN` / `QINIU_BUCKET` / `QINIU_REGION` 不含秘密，技术上可硬编码，
+> 但放环境变量可在换域名/换桶时免改代码免重新构建。
 
 ---
 

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:api": "node cloud-functions/dev-server.mjs",
+    "dev:api": "node scripts/dev-server.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/*.test.js"

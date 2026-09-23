@@ -950,4 +950,11 @@ export function createApp() {
   return app
 }
 
-export default createApp()
+// ⚠️ 必须导出「标识符」而不是 `createApp()` 这样的函数调用表达式。
+// EdgeOne 构建器靠静态分析判断这个文件是不是可注册的函数入口
+// （官方文档：The framework instance must be exported, otherwise the builder
+//  will not recognize it as a function；示例即为 `export default app;`）。
+// 写成 `export default createApp()` 时构建器可能识别不出，函数便不会注册路由，
+// /api/* 会静默回落到静态资源（SPA 的 index.html），表现为「接口全是 200 + HTML」。
+const app = createApp()
+export default app

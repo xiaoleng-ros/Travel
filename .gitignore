@@ -2,6 +2,8 @@ node_modules/
 dist/
 .env
 .env.local
+# EdgeOne 控制台环境变量的粘贴清单（含生产密钥，禁止入库）
+.env.edgeone.txt
 *.log
 .DS_Store
 Thumbs.db
