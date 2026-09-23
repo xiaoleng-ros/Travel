@@ -61,6 +61,14 @@ export async function changePassword(oldPassword, newPassword) {
   })
 }
 
+/**
+ * 修改当前登录管理员的用户名。
+ * 用户名不是凭据，无需哈希；改完也不影响登录态（token 按 payload.id 鉴权）。
+ */
+export async function changeUsername(newUsername) {
+  return api.post('/admin/change-username', { newUsername })
+}
+
 export async function getAdminAlbums() {
   return api.get('/admin/albums')
 }

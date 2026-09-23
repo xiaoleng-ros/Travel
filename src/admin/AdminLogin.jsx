@@ -112,7 +112,7 @@ export default function AdminLogin() {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin"
+                  placeholder="请输入用户名"
                   autoComplete="username"
                   className="w-full h-10 bg-[#faf8f5]/80 border border-[#e7e2d8] rounded-lg px-3.5 text-[14px] text-[#292524] placeholder-[#c4bdb2] transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#d97706]/30 focus-visible:border-[#d97706]/50 focus-visible:bg-white"
                 />

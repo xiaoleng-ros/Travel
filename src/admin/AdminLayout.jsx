@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router'
 import { motion } from 'motion/react'
-import { GridFour, ImageSquare, SignOut, Key, Trash } from '@phosphor-icons/react'
+import { GridFour, ImageSquare, SignOut, UserCircle, Trash } from '@phosphor-icons/react'
 import { adminLogout } from '../api/real'
 
 // 存储配置不再是运行时功能：EdgeOne 部署下七牛凭证来自环境变量，
@@ -10,7 +10,8 @@ const navItems = [
   { path: '/admin', label: '概览', icon: GridFour },
   { path: '/admin/albums', label: '相册管理', icon: ImageSquare },
   { path: '/admin/trash', label: '回收站', icon: Trash },
-  { path: '/admin/change-password', label: '修改密码', icon: Key },
+  // 该页面同时承载「修改用户名」与「修改密码」，所以菜单不叫「修改密码」
+  { path: '/admin/change-password', label: '账号设置', icon: UserCircle },
 ]
 
 function NavLink({ item, location }) {

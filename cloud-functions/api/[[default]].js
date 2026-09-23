@@ -335,6 +335,9 @@ async function findUserByName(username) {
 async function changeUserPassword(id, passwordHash) {
   await q('UPDATE users SET password = ?, password_changed_at = ? WHERE id = ?', [passwordHash, Math.floor(Date.now() / 1000), id])
 }
+async function updateUsername(id, username) {
+  await q('UPDATE users SET username = ? WHERE id = ?', [username, id])
+}
 
 // ---- 密码规则与凭证校验 ----
 // ⚠️ 规则与前端 src/utils/password.js 是同一份定义，改动必须两边同步。
@@ -553,7 +556,11 @@ const wrapAuth = wrap(async (req, res, next) => {
     if (user.password_changed_at && payload.iat < user.password_changed_at) {
       return res.status(401).json({ code: 401, message: '密码已变更，请重新登录' })
     }
-    req.user = payload
+    // 只挂安全字段。不能把库里查出来的整行赋给 req.user —— 那一行含 password 哈希，
+    // 将来任何一处 res.json(req.user) 都会把它泄露出去。
+    // 另外这里用库里的 username，而不是 token 里的：用户名可以在登录之后被修改，
+    // 挂 payload 会让 /admin/me 一直返回旧用户名。
+    req.user = { id: user.id, username: user.username, nickname: user.nickname }
     next()
   } catch {
     return res.status(401).json({ code: 401, message: '登录已过期' })
@@ -681,6 +688,34 @@ function buildApiRouter() {
       sameSite: 'strict',
     })
     res.json({ code: 200, message: '密码修改成功，请重新登录' })
+  }))
+
+  // ---------- 修改用户名 ----------
+  // 用户名列有 UNIQUE 约束：先显式查一次，命中就返回 409，
+  // 不去依赖 SQLite 的约束报错文案（它不保证稳定，也不适合直接展示给用户）。
+  router.post('/admin/change-username', wrapAuth, [
+    body('newUsername').trim()
+      .isLength({ min: 3, max: 20 }).withMessage('用户名长度需为 3-20 位')
+      .matches(/^[a-zA-Z0-9_-]+$/).withMessage('用户名只能包含字母、数字、下划线和连字符'),
+    handleValidation,
+  ], wrap(async (req, res) => {
+    const { newUsername } = req.body
+    const user = await findUser(req.user.id)
+    if (!user) return res.status(401).json({ code: 401, message: '用户不存在，请重新登录' })
+    if (newUsername === user.username) {
+      return res.status(400).json({ code: 400, message: '新用户名与当前用户名相同' })
+    }
+    if (await findUserByName(newUsername)) {
+      return res.status(409).json({ code: 409, message: '该用户名已被占用' })
+    }
+    await updateUsername(user.id, newUsername)
+    // 已有 token 里虽然还带着旧 username，但鉴权走的是 payload.id → 查库，
+    // 所以不必让会话失效；前端拿到新值后更新本地缓存即可。
+    res.json({
+      code: 200,
+      message: '用户名修改成功',
+      data: { user: { id: user.id, username: newUsername, nickname: user.nickname } },
+    })
   }))
 
   router.post('/admin/logout', wrap(async (req, res) => {

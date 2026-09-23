@@ -959,3 +959,55 @@ function verifyPassword(received, stored) {
 规则边界（仅一类被拒 / 6 位下限通过 / 21 位超长被拒）。
 单元测试 **40/40**（原 32 + 新增 `tests/password.test.js` 的 8 项），前端构建通过。
 另验证「前端 Web Crypto 与后端 `node:crypto` 算出的哈希完全一致」。
+
+---
+
+## 十七、支持单独修改用户名（功能，2026-09-23）
+
+### 需求
+
+后台管理员账号一直是 `admin`，改不了。希望能在「修改密码」页面单独改用户名。
+
+### 改动
+
+| 位置 | 内容 |
+|------|------|
+| `cloud-functions/api/[[default]].js` | 新增 `POST /api/admin/change-username` 与 `updateUsername()` db 函数 |
+| `src/api/real.js` | 新增 `changeUsername()` |
+| `src/admin/ChangePassword.jsx` | 页面升级为「账号设置」：上半改用户名、下半改密码 |
+| `src/admin/AdminLayout.jsx` | 菜单文案「修改密码」→「账号设置」，图标改为 `UserCircle` |
+| `src/admin/AdminLogin.jsx` | 用户名输入框 placeholder 不再写死 `admin` |
+
+> 文件名仍是 `ChangePassword.jsx`（避免牵动路由引用），但组件语义已变为「账号设置」。
+
+### 规则与校验
+
+- **3-20 位**，只允许字母、数字、下划线、连字符（前后空格会被 `trim`）
+- 与当前用户名相同 → `400`
+- 用户名已被占用 → **`409`** —— 先显式查一次，不依赖 SQLite 的约束报错文案
+  （那文案不稳定，也不适合直接展示给用户）
+- 未登录 → `401`（`wrapAuth` 保护）
+
+### 两个关键设计点
+
+**1. 改用户名不需要重新登录。**
+`generateToken()` 里确实带了 `username`，但 `wrapAuth` 是拿 `payload.id` 回库里查用户的 ——
+凭据（密码）没变，会话就不该失效。前端改完更新一下本地缓存即可。
+
+**2. 顺手修掉一个隐患：`req.user` 原本挂的是 token 快照。**
+
+原先写的是 `req.user = payload`，导致改完用户名后 `/admin/me` 一直返回**旧**用户名。
+改为从库里取，但**只能挂安全字段**：
+
+```js
+req.user = { id: user.id, username: user.username, nickname: user.nickname }
+```
+
+绝不能写成 `req.user = user` —— 那是数据库整行，含 `password` 哈希，
+将来任何一处 `res.json(req.user)` 都会把它泄露出去。
+
+### 验证
+
+后端冒烟 **11/11**：未登录 401、改成功 200、**改完原会话仍有效**、
+新用户名可登录 / 旧用户名 401、长度与字符校验、同名拒绝、占用 409、`trim` 生效。
+单元测试 **40/40**，前端构建通过。
