@@ -238,6 +238,18 @@ const PUBLIC_PHOTO_FIELDS = [
 // 与原 server/db.js 保持相同的函数语义，SQL 化实现；
 // 展示排序规则不变：手动 sort_order 优先（NULL 靠后），否则按拍摄时间倒序。
 
+// ---- 密码的客户端哈希（与前端 src/utils/password.js 一一对应）----
+/**
+ * 盐值必须与前端 SALT 完全一致 —— 改动会让库中所有已存密码失效。
+ * 定义在这里（而非下方的密码规则区）是为了让 initDb() 建初始管理员时也能直接用，
+ * 避免依赖「const 在何时初始化」这种隐式顺序。
+ */
+const PASSWORD_CLIENT_SALT = 'photo-memoir::v1::'
+
+function clientHash(plain) {
+  return crypto.createHash('sha256').update(PASSWORD_CLIENT_SALT + plain).digest('hex')
+}
+
 let db = null
 
 const SCHEMA = [
@@ -295,7 +307,9 @@ async function initDb() {
     try {
       await db.execute({
         sql: 'INSERT INTO users (username, password, nickname) VALUES (?, ?, ?)',
-        args: ['admin', bcrypt.hashSync(initialPassword, 10), '管理员'],
+        // 存 clientHash(明文)，与「改密码」写入的格式保持一致：
+        // 这样前端无论发明文（curl）还是发哈希（网页），都能校验通过
+        args: ['admin', bcrypt.hashSync(clientHash(initialPassword), 10), '管理员'],
       })
       console.log(`[init] 已创建默认管理员 admin（初始密码来自 ADMIN_INITIAL_PASSWORD${process.env.ADMIN_INITIAL_PASSWORD ? '' : '，未设置时为 123456'}，请登录后修改）`)
     } catch {
@@ -320,6 +334,47 @@ async function findUserByName(username) {
 }
 async function changeUserPassword(id, passwordHash) {
   await q('UPDATE users SET password = ?, password_changed_at = ? WHERE id = ?', [passwordHash, Math.floor(Date.now() / 1000), id])
+}
+
+// ---- 密码规则与凭证校验 ----
+// ⚠️ 规则与前端 src/utils/password.js 是同一份定义，改动必须两边同步。
+
+const PASSWORD_MIN = 6
+const PASSWORD_MAX = 20
+/** 四个字符类别：大写 / 小写 / 数字 / 特殊字符 */
+const PASSWORD_CLASS_RES = [/[A-Z]/, /[a-z]/, /[0-9]/, /[^a-zA-Z0-9]/]
+
+/** 明文密码的强度校验；符合规则返回 null，否则返回给用户看的提示 */
+function passwordRuleError(plain) {
+  if (typeof plain !== 'string' || plain.length < PASSWORD_MIN || plain.length > PASSWORD_MAX) {
+    return `密码长度需为 ${PASSWORD_MIN}-${PASSWORD_MAX} 位`
+  }
+  if (PASSWORD_CLASS_RES.filter((re) => re.test(plain)).length < 2) {
+    return '密码需包含大写字母、小写字母、数字、特殊字符中的至少两类'
+  }
+  return null
+}
+
+/** 客户端哈希的形状：SHA-256 的十六进制表示 */
+const CLIENT_HASH_RE = /^[a-f0-9]{64}$/
+
+/**
+ * 校验登录/改密码时送来的凭证。
+ *
+ * received 有两种可能：
+ *   - 客户端哈希（新前端，64 位 hex）—— F12 的 Network 面板里看不到明文
+ *   - 明文（curl 调用，或迁移前的旧前端）
+ * stored 也有两种可能：
+ *   - bcrypt(clientHash(明文))   新格式
+ *   - bcrypt(明文)              迁移前遗留的旧格式
+ *
+ * 因此两条路都要试。代价是多一次 bcrypt（约 100ms），
+ * 换取的是一段过渡期内新旧密码都能登录；登录接口本身还有限流兜着。
+ */
+function verifyPassword(received, stored) {
+  if (typeof received !== 'string' || received.length === 0) return false
+  if (bcrypt.compareSync(received, stored)) return true
+  return bcrypt.compareSync(clientHash(received), stored)
 }
 
 // ---- token blacklist ----
@@ -564,7 +619,8 @@ function buildApiRouter() {
   ], wrap(async (req, res) => {
     const { username, password } = req.body
     const user = await findUserByName(username)
-    if (!user || !bcrypt.compareSync(password, user.password)) {
+    // password 通常是前端哈希后的值；verifyPassword 同时兼容明文与旧格式记录
+    if (!user || !verifyPassword(password, user.password)) {
       return res.status(401).json({ code: 401, message: '用户名或密码错误' })
     }
     const token = generateToken(user)
@@ -582,25 +638,37 @@ function buildApiRouter() {
   })
 
   router.post('/admin/change-password', wrapAuth, [
-    body('oldPassword').isLength({ min: 1, max: 50 }).withMessage('请输入原密码'),
-    body('newPassword').isLength({ min: 8, max: 50 }).withMessage('新密码长度不能少于8个字符')
-      .matches(/[A-Z]/).withMessage('新密码必须包含至少一个大写字母')
-      .matches(/[a-z]/).withMessage('新密码必须包含至少一个小写字母')
-      .matches(/[0-9]/).withMessage('新密码必须包含至少一个数字')
-      .matches(/[^a-zA-Z0-9]/).withMessage('新密码必须包含至少一个特殊字符'),
+    // 密码已在前端哈希，长度是 64；这里只留宽松的长度上限做防护
+    body('oldPassword').isLength({ min: 1, max: 200 }).withMessage('请输入原密码'),
+    body('newPassword').isLength({ min: 1, max: 200 }).withMessage('请输入新密码'),
     handleValidation,
   ], wrap(async (req, res) => {
     const { oldPassword, newPassword } = req.body
     const user = await findUser(req.user.id)
     if (!user) return res.status(401).json({ code: 401, message: '用户不存在，请重新登录' })
-    if (!bcrypt.compareSync(oldPassword, user.password)) {
+
+    // 新密码校验分两种情况：
+    //  - 新前端提交的是客户端哈希（64 位 hex）：强度已在浏览器里校验过。
+    //    服务端拿不到明文，无法也不该重复校验 —— 这是「F12 看不到明文」的必然代价。
+    //  - 收到明文（curl 直调 / 旧前端）：在服务端补做完整强度校验，不留后门。
+    if (!CLIENT_HASH_RE.test(newPassword)) {
+      const ruleError = passwordRuleError(newPassword)
+      if (ruleError) return res.status(400).json({ code: 400, message: ruleError })
+    }
+
+    if (!verifyPassword(oldPassword, user.password)) {
       return res.status(400).json({ code: 400, message: '原密码不正确' })
     }
     if (oldPassword === newPassword) {
       return res.status(400).json({ code: 400, message: '新密码不能与原密码相同' })
     }
+    // 统一按「客户端哈希」的 bcrypt 存储，让两条提交路径写入同一种格式：
+    //  - 收到哈希（新前端）→ 该哈希本身就是 clientHash(明文)，直接用
+    //  - 收到明文（curl / 旧前端）→ 现算 clientHash 再存
+    // 否则会出现「用明文设的密码，网页端反而登不上」这种自相矛盾的状态。
+    const storedCredential = CLIENT_HASH_RE.test(newPassword) ? newPassword : clientHash(newPassword)
     // 写入 password_changed_at：改密码前签发的所有 token（含其他设备）立即失效
-    await changeUserPassword(user.id, bcrypt.hashSync(newPassword, 10))
+    await changeUserPassword(user.id, bcrypt.hashSync(storedCredential, 10))
     const currentToken = req.cookies?.admin_token
       || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null)
     if (currentToken) {

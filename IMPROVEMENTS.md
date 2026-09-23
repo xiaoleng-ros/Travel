@@ -838,3 +838,124 @@ function b64url(input) {
 - **依赖 `canvas.toBlob`**：老浏览器可能不支持 WebP 输出，代码已回退 PNG，但体积收益会打折。
 - canvas 压缩会**剥离 EXIF**（与旧版 sharp 一致）。方向已按 EXIF 归正，
   拍摄时间也已在压缩前读出并入库，因此不影响展示与排序。
+
+---
+
+## 十五、EdgeOne 函数未被识别，接口全部回落静态页（缺陷修复 · 严重，2026-09-23）
+
+### 现象：不报错，只是「什么都返回 HTML」
+
+首轮部署后前台正常，但后台登录一律失败。网络面板里的特征极具欺骗性：
+
+| 观察 | 值 |
+|------|-----|
+| `POST /api/admin/login` 状态码 | **200**（密码错误时后端返回的是 401） |
+| 响应 `Content-Type` | **text/html** |
+| 响应体积 | 1.3 KB，与 `dist/index.html` 的 gzip 体积（1206 B）吻合 |
+| EdgeOne 函数日志 | **空的** —— 函数一次都没被执行 |
+
+前端 axios 拿到 HTML 字符串，取 `res.code` 得到 `undefined`，于是显示「登录失败」。
+**与账号密码无关** —— 密码本身经 Turso 实测校验通过。
+
+### 一眼判别的方法
+
+比对不同路径的 etag：
+
+```bash
+curl -sI https://域名/api/health | grep -i etag
+curl -sI https://域名/            | grep -i etag
+```
+
+相同 ⇒ 都在返回同一个 `index.html` ⇒ 函数没注册路由，请求被「静态资源优先 + SPA 回退」接走。
+
+更硬的判据：用 `GET` 打一个只注册了 `POST` 的接口。
+若真进了 Express，兜底逻辑会返回 `404 {"code":404,"message":"接口不存在"}`。
+
+### 根因与修复
+
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | 入口写的是 `export default createApp()` —— 函数调用表达式。官方要求「框架实例必须被导出」（示例是 `export default app;`），构建器靠静态分析识别入口 | 改为 `const app = createApp()` + `export default app` |
+| 2 | `edgeone.json` 的 `overseasRegions` 放进了 `cloudFunctions.nodejs` 内部 | 移到 `cloudFunctions` 直下（与 `maxDuration` 不同级） |
+| 3 | `dev-server.mjs` 位于 `cloud-functions/`，而该目录内容会整体进入函数构建产物，它却含 `app.listen()` | 移到 `scripts/dev-server.mjs` |
+
+### 验证
+
+推送后 EdgeOne 自动重建，`/api/health` 于 14:51:50 起返回 JSON。带 cookie 走完整链路：
+登录 200 且正确签发 cookie、错误密码 401、`/api/admin/me` 200、
+`/api/admin/albums` 与 `photos/recent`、`photos/trash` 均 200、公开接口正常。
+
+### 顺带发现（官方文档未提）
+
+**只有函数里真实注册过的路由才会被转发进来**，未注册路径在平台层就被静态资源接走。
+推断构建器会静态解析 Express 的路由定义 —— 这大概也正是「导出必须写成标识符」的原因。
+影响：函数内「未知 `/api` 路径返回 JSON 404」的兜底永远不会触发。
+
+---
+
+## 十六、密码规则统一 + 传输不再出现明文（2026-09-23）
+
+### 需求
+
+1. 改密码与登录的密码强度规则统一为 **长度 6-20 位，大写字母 / 小写字母 / 数字 / 特殊字符任选其二**
+   （原改密码规则是 8-50 位且四类全要，偏严）
+2. 登录与改密码时，**F12 里不能直接看到明文密码**
+
+### 关于第 2 点：DevTools 展示的是解密后的请求体
+
+仅靠 HTTPS 挡不住 Network 面板 —— 它显示的是浏览器解密之后的内容。
+唯一办法是**让发出去的东西本身就不是明文**：前端先做 SHA-256 再发送。
+
+| 文件 | 改动 |
+|------|------|
+| `src/utils/password.js`（新增） | 规则常量 + `checkPassword()` + `hashPassword()`（Web Crypto SHA-256） |
+| `src/api/real.js` | 登录、改密码在发出前哈希密码 |
+| `src/admin/ChangePassword.jsx` | 前端做强度校验（规则只能在这一层做，见下）+ 提示文案更新 |
+| `src/admin/AdminLogin.jsx` | placeholder 改为中性文案 |
+| `cloud-functions/api/[[default]].js` | `clientHash()` / `verifyPassword()` 双格式兼容、新规则、哈希工具提到 `initDb` 之前 |
+
+### 必须明白的代价
+
+密码在前端哈希后，**服务端拿不到明文**：
+
+- 密码强度**只能在客户端校验**，服务端仅能验格式（64 位十六进制）。
+  为不留后门，服务端对「明文提交」（curl 直调）仍做完整强度校验。
+- 登录接口**不校验强度**：本地校验会把不合规的历史密码锁死，而强度规则本身
+  拦不住攻击者（他挑个合规密码照样能猜）。真正起作用的是限流 + bcrypt。
+
+### 哈希不可逆带来的迁移问题（重要）
+
+哈希不可逆 ⇒ 无法用 `clientHash(明文)` 去匹配旧的 `bcrypt(明文)` 记录。
+**不迁移，现有密码会直接登不进去。**
+
+服务端因此实现双格式兼容：
+
+```js
+function verifyPassword(received, stored) {
+  if (bcrypt.compareSync(received, stored)) return true       // 哈希→新格式 / 明文→旧格式
+  return bcrypt.compareSync(clientHash(received), stored)     // 明文→新格式
+}
+```
+
+| 库中记录 | 客户端提交 | 结果 |
+|----------|-----------|------|
+| `bcrypt(明文)` 旧 | 明文 | ✓ |
+| `bcrypt(明文)` 旧 | 哈希 | ✗ ← **必须迁移的原因** |
+| `bcrypt(clientHash(明文))` 新 | 哈希 | ✓ |
+| `bcrypt(clientHash(明文))` 新 | 明文 | ✓（旧客户端仍可用） |
+
+迁移由 `scripts/migrate-password-hash.mjs` 完成：默认预演，加 `--apply` 才写入，
+带匹配校验与回读确认。迁移后**用户的密码本身没有变化**，只是存储格式变了。
+
+### 另一处必须统一的地方
+
+「用明文路径设置的密码，网页端反而登不上」—— 因为明文路径原本写的是 `bcrypt(明文)`，
+而网页发的是哈希，两者对不上。现在改密码时**无论哪条路径都统一存 `bcrypt(clientHash(明文))`**，
+`initDb()` 创建初始管理员时也用同一格式。
+
+### 验证
+
+后端冒烟 **12/12**：覆盖 明文/哈希 × 新旧格式 四种组合、改密码两条路径、
+规则边界（仅一类被拒 / 6 位下限通过 / 21 位超长被拒）。
+单元测试 **40/40**（原 32 + 新增 `tests/password.test.js` 的 8 项），前端构建通过。
+另验证「前端 Web Crypto 与后端 `node:crypto` 算出的哈希完全一致」。

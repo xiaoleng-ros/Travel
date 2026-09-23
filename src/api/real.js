@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { getExifTime } from '../utils/photoMeta'
 import { compressImage } from '../utils/compress'
+import { hashPassword } from '../utils/password'
 
 const api = axios.create({
   baseURL: '/api',
@@ -32,17 +33,32 @@ export async function checkAdminSession() {
   return api.get('/admin/me')
 }
 
+/**
+ * 登录。
+ *
+ * 密码在发出前先做客户端哈希 —— DevTools 展示的是**解密后**的请求体，
+ * 单靠 HTTPS 挡不住「F12 里看到明文密码」，只有让发出去的东西本身不是明文才行。
+ */
 export async function adminLogin(username, password) {
-  return api.post('/admin/login', { username, password })
+  return api.post('/admin/login', { username, password: await hashPassword(password) })
 }
 
 export async function adminLogout() {
   return api.post('/admin/logout')
 }
 
-// 修改当前登录管理员密码
+/**
+ * 修改当前登录管理员密码。
+ *
+ * 新旧密码都先做客户端哈希再发送，Network 面板里两个都不会出现明文。
+ * 注意：哈希之后服务端拿不到明文，所以「新密码强度」只能在 ChangePassword
+ * 组件里校验，服务端仅能验格式（这是隐藏明文的必然代价）。
+ */
 export async function changePassword(oldPassword, newPassword) {
-  return api.post('/admin/change-password', { oldPassword, newPassword })
+  return api.post('/admin/change-password', {
+    oldPassword: await hashPassword(oldPassword),
+    newPassword: await hashPassword(newPassword),
+  })
 }
 
 export async function getAdminAlbums() {

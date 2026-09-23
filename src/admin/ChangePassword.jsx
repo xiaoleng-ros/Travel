@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router'
 import { motion } from 'motion/react'
 import { Key, Eye, EyeSlash, CheckCircle, LockKey } from '@phosphor-icons/react'
 import { changePassword } from '../api/real'
+import { checkPassword, PASSWORD_RULE_TEXT } from '../utils/password'
 
 /**
  * 修改密码页面
@@ -24,6 +25,18 @@ export default function ChangePassword() {
     e.preventDefault()
     setError('')
     setSuccess(false)
+
+    // 强度规则只能在这里校验：密码在本函数里就会被哈希，
+    // 服务端收到的只是哈希值，无法得知明文，也就无法校验强度。
+    if (!oldPassword) {
+      setError('请输入原密码')
+      return
+    }
+    const ruleError = checkPassword(newPassword)
+    if (ruleError) {
+      setError(ruleError)
+      return
+    }
 
     // 前端校验：新密码与确认密码必须一致
     if (newPassword !== confirmPassword) {
@@ -117,12 +130,12 @@ export default function ChangePassword() {
             id="newPassword"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="8-50位，含大小写字母、数字和特殊字符"
+            placeholder="长度 6-20 位，至少两类字符"
             show={showNew}
             onToggle={() => setShowNew(!showNew)}
             autoComplete="new-password"
           />
-          <p className="text-[11px] text-[#c4bdb2]">至少 8 位，需包含大写字母、小写字母、数字和特殊字符</p>
+          <p className="text-[11px] text-[#c4bdb2]">{PASSWORD_RULE_TEXT}</p>
         </div>
 
         <div className="space-y-1.5">
