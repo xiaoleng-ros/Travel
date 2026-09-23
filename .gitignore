@@ -18,5 +18,20 @@ api-dev.db-journal
 api-dev.db-shm
 api-dev.db-wal
 
-# 本地 IDE 工作目录（调试截图与记忆等，不入库）
+# 本地 IDE 工作目录（调试截图、方案与决策记录等，不入库）
 .workbuddy/
+
+# 临时冒烟 / 诊断脚本与产物：一律不入库
+# （历史上曾误入库过一个 server/_smoke.cjs，这类文件常含硬编码测试凭据）
+_smoke*
+*_smoke*
+*_probe*
+scratch*
+*.tmp
+*.bak
+
+# 本地 SQLite（libSQL）测试库及其附属文件
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
