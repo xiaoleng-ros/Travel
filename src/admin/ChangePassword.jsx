@@ -175,9 +175,14 @@ export default function ChangePassword() {
       </div>
     )
 
+  // 两张卡片左右并排（md 及以上），窄屏自动回退成上下堆叠；标题跨两列
   return (
-    <div className="p-8 max-w-2xl">
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+    <div className="p-8 max-w-5xl grid gap-6 md:grid-cols-2 items-start">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="md:col-span-2"
+      >
         <h1 className="text-[22px] font-normal tracking-tight text-[#292524]" style={{ fontFamily: "'Instrument Serif', serif" }}>
           账号设置
         </h1>
@@ -190,7 +195,7 @@ export default function ChangePassword() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.03 }}
-        className="rounded-2xl bg-white border border-[#e7e2d8] p-8 space-y-5 mb-6"
+        className="rounded-2xl bg-white border border-[#e7e2d8] p-8 space-y-5"
       >
         <div className="flex items-center gap-2.5">
           <UserCircle size={18} className="text-[#a8a098]" />

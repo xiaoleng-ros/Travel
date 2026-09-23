@@ -986,6 +986,10 @@ function verifyPassword(received, stored) {
 | `src/admin/AdminLogin.jsx` | 用户名输入框 placeholder 不再写死 `admin` |
 
 > 文件名仍是 `ChangePassword.jsx`（避免牵动路由引用），但组件语义已变为「账号设置」。
+>
+> **布局**：两张卡片**左右并排**（`md:grid-cols-2` + `items-start`），标题跨两列，
+> 窄屏自动回退为上下堆叠；容器宽度由 `max-w-2xl` 放宽到 `max-w-5xl`
+> —— 原来是单列堆叠，右侧会空出一大片。
 
 ### 规则与校验
 
