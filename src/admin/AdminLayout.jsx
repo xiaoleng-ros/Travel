@@ -1,115 +1,151 @@
+import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router'
+import {
+  IconChartBar,
+  IconPhoto,
+  IconFolders,
+  IconTrash,
+  IconSettings,
+  IconUser,
+  IconExternalLink,
+  IconLogout,
+  IconMenu2,
+  IconX,
+} from '@tabler/icons-react'
 import { useState } from 'react'
-import { Link, Outlet, useNavigate, useLocation } from 'react-router'
-import { motion } from 'motion/react'
-import { GridFour, ImageSquare, SignOut, UserCircle, Trash } from '@phosphor-icons/react'
-import { adminLogout } from '../api/real'
+import { useAuth } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 
-// 存储配置不再是运行时功能：EdgeOne 部署下七牛凭证来自环境变量，
-// 改动需在平台重新配置，因此移除「对象存储」入口
-const navItems = [
-  { path: '/admin', label: '概览', icon: GridFour },
-  { path: '/admin/albums', label: '相册管理', icon: ImageSquare },
-  { path: '/admin/trash', label: '回收站', icon: Trash },
-  // 该页面同时承载「修改用户名」与「修改密码」，所以菜单不叫「修改密码」
-  { path: '/admin/change-password', label: '账号设置', icon: UserCircle },
+const NAV = [
+  { to: '/dashboard', label: 'Overview', icon: IconChartBar, end: true },
+  { to: '/dashboard/photos', label: 'Photos', icon: IconPhoto },
+  { to: '/dashboard/albums', label: 'Albums', icon: IconFolders },
+  { to: '/dashboard/trash', label: 'Trash', icon: IconTrash },
+  { to: '/dashboard/settings', label: 'Settings', icon: IconSettings },
+  { to: '/dashboard/account', label: 'Account', icon: IconUser },
 ]
 
-function NavLink({ item, location }) {
-  const Icon = item.icon
-  const active = location.pathname === item.path
-
-  return (
-    <Link
-      to={item.path}
-      className={`relative flex items-center gap-3 px-4 h-11 rounded-xl text-[14px] transition-all duration-200 ${
-        active
-          ? 'bg-[#fef3c7] text-[#292524] font-medium'
-          : 'text-[#a8a098] hover:text-[#292524] hover:bg-[#f7f5f1]'
-      }`}
-    >
-      {active && (
-        <motion.div
-          layoutId="nav-indicator"
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-[#d97706] rounded-full"
-          transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-        />
-      )}
-      <Icon size={18} weight={active ? 'bold' : 'regular'} className="shrink-0" />
-      {item.label}
-    </Link>
-  )
-}
-
 export default function AdminLayout() {
+  const { user, logout } = useAuth()
+  const { getSetting } = useSettings()
   const navigate = useNavigate()
   const location = useLocation()
-  const [user] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('admin_user')) } catch { return null }
-  })
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  const current = NAV.find(
+    (item) => (item.end ? location.pathname === item.to : location.pathname.startsWith(item.to)),
+  )
 
   const handleLogout = async () => {
-    try {
-      await adminLogout()
-    } catch {
-      // 即使后端请求失败，也清除本地登录状态
-    }
-    localStorage.removeItem('admin_user')
-    sessionStorage.removeItem('admin_logged_in')
-    navigate('/admin/login')
+    await logout()
+    navigate('/signin', { replace: true })
   }
 
   return (
-    <div className="h-[100dvh] bg-[#f7f5f1] flex overflow-hidden">
-      <aside className="w-64 h-full bg-white/90 backdrop-blur-sm border-r border-[#e7e2d8] flex flex-col shrink-0">
-        <div className="px-6 h-16 flex items-center gap-3 border-b border-[#e7e2d8]">
-          <div className="w-12 h-12 rounded-xl overflow-hidden shadow-[0_2px_6px_rgba(217,119,6,0.12)]">
+    <div className="flex min-h-screen bg-neutral-50 dark:bg-neutral-950">
+      {/* 遮罩 */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* 侧边栏 */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-neutral-200 bg-white transition-transform dark:border-neutral-800 dark:bg-neutral-900 md:translate-x-0 ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex h-14 items-center justify-between border-b border-neutral-200 px-4 dark:border-neutral-800">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <img
-              src="/logo.png"
-              alt="人间快照"
-              className="w-full h-full object-cover"
+              src={getSetting('app:avatarUrl') || '/brand/avatar.webp'}
+              alt=""
+              className="size-7 rounded-full object-cover"
             />
-          </div>
-          <div>
-            <h2 className="text-[15px] font-normal text-[#292524]" style={{ fontFamily: "'Instrument Serif', serif" }}>管理后台</h2>
-            <p className="text-[11px] text-[#a8a098] leading-none mt-0.5">照片回忆录</p>
-          </div>
+            <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+              {getSetting('app:title') || 'Memora'}
+            </span>
+          </Link>
+          <button
+            type="button"
+            className="text-neutral-400 hover:text-neutral-600 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          >
+            <IconX size={18} />
+          </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-0.5 mt-1">
-          {navItems.map((item) => (
-            <NavLink key={item.path} item={item} location={location} />
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+          {NAV.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              onClick={() => setMobileOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  isActive
+                    ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
+                    : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800'
+                }`
+              }
+            >
+              <item.icon size={17} />
+              {item.label}
+            </NavLink>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-[#e7e2d8]">
-          <div className="rounded-xl bg-[#f7f5f1] p-4 space-y-3">
-            <div className="min-w-0">
-              <div className="text-[14px] font-semibold text-[#292524] truncate">
-                {user?.nickname || '管理员'}
-              </div>
-              <div className="text-[12px] text-[#a8a098] mt-0.5">管理员</div>
+        <div className="border-t border-neutral-200 p-3 dark:border-neutral-800">
+          <div className="flex items-center gap-2.5 px-2 py-1.5">
+            <span className="flex size-8 items-center justify-center rounded-full bg-neutral-200 text-xs font-semibold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-200">
+              {(user?.username || user?.email || 'A').slice(0, 1).toUpperCase()}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-neutral-800 dark:text-neutral-100">
+                {user?.username || 'Admin'}
+              </p>
+              <p className="truncate text-[11px] text-neutral-400">{user?.email}</p>
             </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center justify-center gap-2 w-full h-9 rounded-lg border border-[#e7e2d8] bg-white text-[13px] text-[#787168] font-medium transition-all duration-150 hover:border-red-200 hover:bg-red-50 hover:text-red-500"
-            >
-              <SignOut size={15} />
-              退出登录
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition hover:bg-red-50 dark:hover:bg-red-950/40"
+          >
+            <IconLogout size={17} />
+            Sign Out
+          </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto bg-gradient-to-br from-[#f7f5f1] via-[#f5f0e8]/30 to-[#f7f5f1]">
-        <motion.div
-          key={location.pathname}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        >
+      {/* 主体 */}
+      <div className="flex min-w-0 flex-1 flex-col md:pl-60">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-neutral-200 bg-white/85 px-4 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/85">
+          <button
+            type="button"
+            className="text-neutral-500 md:hidden"
+            onClick={() => setMobileOpen(true)}
+          >
+            <IconMenu2 size={20} />
+          </button>
+          <h1 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+            {current?.label || 'Dashboard'}
+          </h1>
+          <Link
+            to="/"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+          >
+            <IconExternalLink size={14} />
+            Visit site
+          </Link>
+        </header>
+
+        <main className="flex-1 p-4 md:p-6">
           <Outlet />
-        </motion.div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }
