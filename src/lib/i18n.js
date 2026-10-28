@@ -60,6 +60,9 @@ export const messages = {
     'globe.annotation.shutter.desc': 'Fast / Medium / Slow',
     'globe.annotation.altitude': 'Altitude',
     'globe.annotation.altitude.desc': 'Low / Medium / High',
+    'globe.mapError': 'Map failed to load',
+    'globe.mapErrorHint':
+      'The map script could not be fetched. Check your network connection or the Amap key in admin settings.',
     'viewer.basic': 'Basic Information',
     'viewer.rating': 'Rating',
     'viewer.albums': 'Albums Included',
@@ -254,6 +257,8 @@ export const messages = {
     'globe.annotation.shutter.desc': '高速 / 中速 / 慢速',
     'globe.annotation.altitude': '海拔',
     'globe.annotation.altitude.desc': '低 / 中 / 高',
+    'globe.mapError': '地图加载失败',
+    'globe.mapErrorHint': '地图脚本未能加载，请检查网络，或确认后台设置里的高德地图 Key 是否有效。',
     'viewer.basic': '基本信息',
     'viewer.rating': '评分',
     'viewer.albums': '所属相册',

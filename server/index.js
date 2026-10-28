@@ -9,7 +9,7 @@ import rateLimit from 'express-rate-limit'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { resolveAmapKey, reverseGeocode } from './geocode.js'
+import { resolveAmapKey, reverseGeocode, wgs84ToGcj02 } from './geocode.js'
 import {
   UPLOAD_DIR,
   UPLOAD_THUMB_DIR,
@@ -147,6 +147,11 @@ function publicPhoto(photo) {
     exif,
     latitude,
     longitude,
+    // 高德底图与地理编码都是 GCJ-02，服务端统一换算，避免前端标记点整体偏移数百米
+    gcj02:
+      typeof latitude === 'number' && typeof longitude === 'number'
+        ? wgs84ToGcj02(longitude, latitude)
+        : null,
     country,
     city,
     locationName,
@@ -247,6 +252,16 @@ app.post('/api/change-password', requireAuth, (req, res) => {
 // Public gallery data
 // ---------------------------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
+
+// 地图页要加载高德 JS API，key 必须下发给浏览器（高德本身靠前端的域名白名单约束）
+app.get('/api/map/config', (_req, res) => {
+  const settings = getDb().settings
+  res.json({
+    key: resolveAmapKey(settings),
+    style: process.env.AMAP_MAP_STYLE || 'amap://styles/whitesmoke',
+    styleDark: process.env.AMAP_MAP_STYLE_DARK || 'amap://styles/dark',
+  })
+})
 
 app.get('/api/photos/visible', (_req, res) => {
   res.json(listPhotos().map(publicPhoto))

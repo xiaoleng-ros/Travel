@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import maplibregl from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import {
   IconAdjustmentsHorizontal,
   IconClock,
@@ -15,6 +13,7 @@ import PhotoViewer from '../components/PhotoViewer'
 import { useGalleryData } from '../context/GalleryDataContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLocale } from '../context/LocaleContext'
+import { amapStyle, getMapConfig, loadAmap } from '../lib/amap'
 import { dayjs, formatExposure, formatFocalLength, thumbnailFor } from '../lib/format'
 
 const ANNOTATIONS = ['default', 'disable', 'focalLength', 'shutter', 'altitude']
@@ -48,81 +47,19 @@ function annotationColor(photo, mode) {
   }
 }
 
-function webglAvailable() {
-  try {
-    const canvas = document.createElement('canvas')
-    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'))
-  } catch {
-    return false
-  }
-}
-
-const AMAP_TILES = [1, 2, 3, 4].map(
-  (n) =>
-    `https://webrd0${n}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}`,
-)
-
-function styleFor(dark) {
-  return {
-    version: 8,
-    sources: {
-      amap: {
-        type: 'raster',
-        tiles: AMAP_TILES,
-        tileSize: 256,
-        maxzoom: 18,
-        attribution: '© 高德地图',
-      },
-      // 阿里 DataV GeoAtlas，构建期取一次落盘到 public/geo，运行时不请求外部
-      provinces: { type: 'geojson', data: '/geo/china-provinces.json' },
-      border: { type: 'geojson', data: '/geo/china-border.json' },
-    },
-    layers: [
-      {
-        id: 'amap',
-        type: 'raster',
-        source: 'amap',
-        // 高德没有官方深色瓦片，深色主题靠图层调色压暗
-        paint: dark
-          ? {
-              'raster-saturation': -0.82,
-              'raster-contrast': 0.32,
-              'raster-brightness-max': 0.52,
-            }
-          : {},
-      },
-      {
-        id: 'province-lines',
-        type: 'line',
-        source: 'provinces',
-        paint: {
-          'line-color': dark ? 'rgba(226,232,240,0.34)' : 'rgba(30,41,59,0.26)',
-          'line-width': 1,
-        },
-      },
-      {
-        id: 'border-lines',
-        type: 'line',
-        source: 'border',
-        paint: {
-          'line-color': dark ? 'rgba(248,250,252,0.68)' : 'rgba(15,23,42,0.58)',
-          'line-width': 1.7,
-        },
-      },
-    ],
-  }
-}
-
+// 高德的 renderMarker / renderCluster 回调在这个版本里不采纳自定义 DOM，聚合改为自己算屏幕网格
 export default function GlobePage() {
   const { photos } = useGalleryData()
   const { mode } = useTheme()
   const { t } = useLocale()
   const containerRef = useRef(null)
+  const AMapRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef([])
-  const markersGroupRef = useRef(null)
+  const configRef = useRef(null)
   const fittedRef = useRef(false)
   const [dark, setDark] = useState(false)
+  const [ready, setReady] = useState(false)
   const [annotationOpen, setAnnotationOpen] = useState(false)
   const [annotation, setAnnotation] = useState('default')
   const [timelineOn, setTimelineOn] = useState(true)
@@ -170,39 +107,41 @@ export default function GlobePage() {
     return sortedPhotos.slice(0, index)
   }, [timelineOn, sortedPhotos, index, geoPhotos])
 
-  // 初始化地图
+  // 初始化高德地图
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    const prefersDark = document.documentElement.classList.contains('dark')
-    setDark(prefersDark)
-    if (!webglAvailable()) {
-      setMapError('WebGL is not available in this environment.')
-      return
-    }
-    let map
-    try {
-      map = new maplibregl.Map({
-        container,
-        style: styleFor(prefersDark),
-        center: [108, 32],
-        zoom: 2.4,
-        attributionControl: false,
+    let disposed = false
+    loadAmap()
+      .then(async (AMap) => {
+        if (disposed || !containerRef.current) return
+        const config = await getMapConfig()
+        if (disposed) return
+        configRef.current = config
+        const prefersDark = document.documentElement.classList.contains('dark')
+        setDark(prefersDark)
+        const map = new AMap.Map(containerRef.current, {
+          viewMode: '2D',
+          zooms: [3, 18],
+          center: [108, 34],
+          zoom: 4.4,
+          mapStyle: amapStyle(config, prefersDark),
+          resizeEnable: true,
+        })
+        AMapRef.current = AMap
+        mapRef.current = map
+        setReady(true)
       })
-    } catch (error) {
-      console.warn('[globe] WebGL unavailable:', error?.message)
-      setMapError(error?.message || 'WebGL unavailable')
-      return
-    }
-    mapRef.current = map
-    map.on('error', (event) => {
-      console.warn('[globe] map error:', event?.error?.message || event)
-    })
-    markersGroupRef.current = document.createElement('div')
+      .catch((err) => {
+        if (disposed) return
+        setMapError(err?.message || '地图初始化失败')
+      })
     return () => {
-      map.remove()
-      mapRef.current = null
+      disposed = true
+      for (const marker of markersRef.current) marker.setMap(null)
       markersRef.current = []
+      mapRef.current?.destroy()
+      mapRef.current = null
+      AMapRef.current = null
+      setReady(false)
     }
   }, [])
 
@@ -210,112 +149,122 @@ export default function GlobePage() {
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    const isDark =
+      mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
     setDark(isDark)
-    map.setStyle(styleFor(isDark))
+    map.setMapStyle(amapStyle(configRef.current, isDark))
   }, [mode])
 
-  // 首次拿到坐标后，视野收拢到照片实际分布范围
+  // 标记渲染：按屏幕网格聚合，缩放或平移后重算
   useEffect(() => {
+    const AMap = AMapRef.current
     const map = mapRef.current
-    if (!map || fittedRef.current || geoPhotos.length === 0) return
-    const lats = geoPhotos.map((p) => p.latitude)
-    const lons = geoPhotos.map((p) => p.longitude)
-    fittedRef.current = true
-    map.fitBounds(
-      [
-        [Math.min(...lons), Math.min(...lats)],
-        [Math.max(...lons), Math.max(...lats)],
-      ],
-      { padding: 56, maxZoom: 11, duration: 0 },
-    )
-  }, [geoPhotos])
+    if (!map || !AMap) return
 
-  // 标记渲染（屏幕网格聚合）
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-    const rebuild = () => {
-      const group = markersGroupRef.current
-      if (!group) return
-      for (const marker of markersRef.current) marker.remove()
+    const clear = () => {
+      for (const marker of markersRef.current) marker.setMap(null)
       markersRef.current = []
+    }
 
-      const CELL = 52
+    const singleElement = (photo) => {
+      const el = document.createElement('div')
+      el.className = 'map-single-marker'
+      const color = annotation === 'disable' ? null : annotationColor(photo, annotation)
+      if (color) el.style.boxShadow = `0 0 0 3px ${color}, 0 8px 20px rgba(0,0,0,.24)`
+      const img = document.createElement('img')
+      img.src = thumbnailFor(photo)
+      img.alt = ''
+      img.draggable = false
+      el.appendChild(img)
+      el.addEventListener('click', (event) => {
+        event.stopPropagation()
+        setActivePhoto(photo)
+      })
+      return el
+    }
+
+    const clusterElement = (list) => {
+      const el = document.createElement('div')
+      el.className = 'map-cluster-marker'
+      el.textContent = String(list.length)
+      el.addEventListener('click', (event) => {
+        event.stopPropagation()
+        const [lng, lat] = list[0].gcj02
+        map.setZoomAndCenter(Math.min(map.getZoom() + 2, 17), new AMap.LngLat(lng, lat))
+      })
+      return el
+    }
+
+    const CELL = 56
+    const rebuild = () => {
+      clear()
       const cells = new Map()
       for (const photo of visiblePhotos) {
-        const point = map.project([photo.longitude, photo.latitude])
+        if (!Array.isArray(photo.gcj02)) continue
+        const point = map.lngLatToContainer(new AMap.LngLat(photo.gcj02[0], photo.gcj02[1]))
         if (!point) continue
         const key = `${Math.floor(point.x / CELL)}:${Math.floor(point.y / CELL)}`
         const list = cells.get(key)
         if (list) list.push(photo)
         else cells.set(key, [photo])
       }
-
       for (const list of cells.values()) {
-        const head = list[0]
-        const element = document.createElement('div')
-        if (list.length === 1) {
-          element.className = 'map-single-marker'
-          const color = annotationColor(head, annotation)
-          if (color && annotation !== 'disable') {
-            element.style.boxShadow = `0 0 0 3px ${color}, 0 4px 12px rgba(0,0,0,.35)`
-          }
-          const img = document.createElement('img')
-          img.src = thumbnailFor(head)
-          img.alt = ''
-          img.draggable = false
-          element.appendChild(img)
-          element.addEventListener('click', (event) => {
-            event.stopPropagation()
-            setActivePhoto(head)
-          })
-        } else {
-          element.className = 'map-cluster-marker'
-          element.textContent = String(list.length)
-          element.addEventListener('click', (event) => {
-            event.stopPropagation()
-            map.easeTo({
-              center: [head.longitude, head.latitude],
-              zoom: Math.min((map.getZoom() || 0) + 2.5, 16),
-            })
-          })
-        }
-        const marker = new maplibregl.Marker({ element })
-          .setLngLat([head.longitude, head.latitude])
-          .addTo(map)
+        const single = list.length === 1
+        const [lng, lat] = list[0].gcj02
+        const marker = new AMap.Marker({
+          position: new AMap.LngLat(lng, lat),
+          content: single ? singleElement(list[0]) : clusterElement(list),
+          offset: new AMap.Pixel(single ? -20 : -32, single ? -20 : -32),
+          zIndex: single ? 120 : 110,
+        })
+        marker.setMap(map)
         markersRef.current.push(marker)
       }
     }
 
+    const geoData = visiblePhotos.filter((p) => Array.isArray(p.gcj02))
+
     rebuild()
     map.on('moveend', rebuild)
     map.on('zoomend', rebuild)
+    map.on('resize', rebuild)
+
+    if (!fittedRef.current && geoData.length) {
+      fittedRef.current = true
+      try {
+        map.setFitView(null, true, [72, 72, 140, 72], 12)
+      } catch {
+        const [lng, lat] = geoData[0].gcj02
+        map.setZoomAndCenter(5, new AMap.LngLat(lng, lat))
+      }
+    }
+
     return () => {
       map.off('moveend', rebuild)
       map.off('zoomend', rebuild)
-      for (const marker of markersRef.current) marker.remove()
-      markersRef.current = []
+      map.off('resize', rebuild)
+      clear()
     }
-  }, [visiblePhotos, annotation])
+  }, [visiblePhotos, annotation, ready])
 
-  const currentDate = timelineOn && index > 0 && sortedPhotos[index - 1]
-    ? dayjs(sortedPhotos[index - 1].dateTaken).format('MMM D, YYYY')
-    : '—'
+  const currentDate =
+    timelineOn && index > 0 && sortedPhotos[index - 1]
+      ? dayjs(sortedPhotos[index - 1].dateTaken).format('YYYY年M月D日')
+      : '—'
 
   return (
-    <div className="fixed inset-0 z-30">
+    <div className="fixed inset-0 z-30 bg-neutral-100 dark:bg-neutral-900">
       <div ref={containerRef} className="absolute inset-0" />
       {mapError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-100 dark:bg-neutral-900">
           <p className="text-4xl">🗺️</p>
           <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
-            Map could not be initialized
+            {t('globe.mapError')}
           </p>
           <p className="max-w-sm text-center text-xs text-neutral-500 dark:text-neutral-400">
-            WebGL is unavailable in this browser or environment. Open the site in a regular
-            browser to view the photo globe.
+            {t('globe.mapErrorHint')}
           </p>
+          <p className="max-w-sm text-center text-xs text-neutral-400">{mapError}</p>
         </div>
       )}
 

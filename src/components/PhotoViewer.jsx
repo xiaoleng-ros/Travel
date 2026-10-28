@@ -460,8 +460,7 @@ export default function PhotoViewer({ photoId, photos = [], albums = [], onClose
             {typeof photo.latitude === 'number' && typeof photo.longitude === 'number' && (
               <div className="h-44 overflow-hidden rounded-lg border border-white/10">
                 <MiniMap
-                  latitude={photo.latitude}
-                  longitude={photo.longitude}
+                  position={photo.gcj02}
                   dark={dark}
                 />
               </div>
