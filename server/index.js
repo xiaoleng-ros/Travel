@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { resolveAmapKey, reverseGeocode } from './geocode.js'
 import {
   UPLOAD_DIR,
   UPLOAD_THUMB_DIR,
@@ -481,6 +482,19 @@ app.post('/api/admin/upload', requireAuth, upload.array('files', 12), async (req
       albumIds: [],
       contentHash: hash,
     }
+    if (latitude !== null && longitude !== null) {
+      const geo = await reverseGeocode({
+        latitude,
+        longitude,
+        key: resolveAmapKey(getDb().settings),
+      })
+      if (geo) {
+        photo.country = geo.country
+        photo.city = geo.city
+        photo.locationName = geo.locationName
+        photo.geocoding = geo
+      }
+    }
     addPhoto(photo)
     if (albumId) {
       const album = findAlbum(albumId)
@@ -527,6 +541,27 @@ app.patch('/api/admin/photos/:id', requireAuth, (req, res) => {
   }
   const updated = updatePhoto(photo.id, patch)
   res.json({ success: true, photo: publicPhoto(updated) })
+})
+
+app.post('/api/admin/photos/:id/geocode', requireAuth, async (req, res) => {
+  const photo = findPhoto(req.params.id)
+  if (!photo) return res.status(404).json({ message: '照片不存在。' })
+  if (typeof photo.latitude !== 'number' || typeof photo.longitude !== 'number') {
+    return res.status(400).json({ message: '这张照片没有经纬度，无法自动识别位置。' })
+  }
+  const geo = await reverseGeocode({
+    latitude: photo.latitude,
+    longitude: photo.longitude,
+    key: resolveAmapKey(getDb().settings),
+  })
+  if (!geo) return res.status(502).json({ message: '高德没有返回可用位置，请手动填写。' })
+  const saved = updatePhoto(photo.id, {
+    country: geo.country,
+    city: geo.city,
+    locationName: geo.locationName,
+    geocoding: geo,
+  })
+  res.json({ success: true, photo: publicPhoto(saved) })
 })
 
 app.delete('/api/admin/photos/:id', requireAuth, (req, res) => {

@@ -73,6 +73,9 @@ function styleFor(dark) {
         maxzoom: 18,
         attribution: '© 高德地图',
       },
+      // 阿里 DataV GeoAtlas，构建期取一次落盘到 public/geo，运行时不请求外部
+      provinces: { type: 'geojson', data: '/geo/china-provinces.json' },
+      border: { type: 'geojson', data: '/geo/china-border.json' },
     },
     layers: [
       {
@@ -87,6 +90,24 @@ function styleFor(dark) {
               'raster-brightness-max': 0.52,
             }
           : {},
+      },
+      {
+        id: 'province-lines',
+        type: 'line',
+        source: 'provinces',
+        paint: {
+          'line-color': dark ? 'rgba(226,232,240,0.34)' : 'rgba(30,41,59,0.26)',
+          'line-width': 1,
+        },
+      },
+      {
+        id: 'border-lines',
+        type: 'line',
+        source: 'border',
+        paint: {
+          'line-color': dark ? 'rgba(248,250,252,0.68)' : 'rgba(15,23,42,0.58)',
+          'line-width': 1.7,
+        },
       },
     ],
   }

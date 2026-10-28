@@ -9,6 +9,7 @@ import {
   IconStarFilled,
   IconStar,
   IconLoader2,
+  IconMapPin,
 } from '@tabler/icons-react'
 import { api, uploadPhotos } from '../lib/api'
 import { useToast } from '../context/ToastContext'
@@ -24,9 +25,11 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
   const [rating, setRating] = useState(Number(photo.rating || 0))
   const [city, setCity] = useState(photo.city || '')
   const [country, setCountry] = useState(photo.country || '')
+  const [locationName, setLocationName] = useState(photo.locationName || '')
   const [hidden, setHidden] = useState(Boolean(photo.hidden))
   const [albumIds, setAlbumIds] = useState((photo.albumIds || []).map(Number))
   const [saving, setSaving] = useState(false)
+  const [detecting, setDetecting] = useState(false)
 
   const toggleAlbum = (id) =>
     setAlbumIds((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]))
@@ -44,6 +47,7 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
         rating,
         city,
         country,
+        locationName,
         hidden,
         albumIds,
       })
@@ -54,6 +58,21 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
       push(err.message, 'error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const detect = async () => {
+    setDetecting(true)
+    try {
+      const res = await api.post(`/api/admin/photos/${photo.id}/geocode`)
+      setCity(res.photo.city || '')
+      setCountry(res.photo.country || '')
+      setLocationName(res.photo.locationName || '')
+      push(t('admin.locationDetected'))
+    } catch (err) {
+      push(err.message, 'error')
+    } finally {
+      setDetecting(false)
     }
   }
 
@@ -154,6 +173,31 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
               </span>
               <input className="field" value={country} onChange={(e) => setCountry(e.target.value)} />
             </label>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+              {t('admin.locationName')}
+            </span>
+            <div className="flex gap-2">
+              <input
+                className="field flex-1"
+                value={locationName}
+                onChange={(e) => setLocationName(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={detect}
+                disabled={detecting}
+                className="btn btn-soft shrink-0 justify-center"
+              >
+                {detecting ? (
+                  <IconLoader2 size={15} className="animate-spin" />
+                ) : (
+                  <IconMapPin size={15} />
+                )}
+                {t('admin.regeocode')}
+              </button>
+            </div>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
