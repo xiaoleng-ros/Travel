@@ -57,22 +57,38 @@ function webglAvailable() {
   }
 }
 
+const AMAP_TILES = [1, 2, 3, 4].map(
+  (n) =>
+    `https://webrd0${n}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}`,
+)
+
 function styleFor(dark) {
   return {
     version: 8,
     sources: {
-      carto: {
+      amap: {
         type: 'raster',
-        tiles: [
-          dark
-            ? 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-            : 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        ],
+        tiles: AMAP_TILES,
         tileSize: 256,
-        attribution: '© OpenStreetMap © CARTO',
+        maxzoom: 18,
+        attribution: '© 高德地图',
       },
     },
-    layers: [{ id: 'carto', type: 'raster', source: 'carto' }],
+    layers: [
+      {
+        id: 'amap',
+        type: 'raster',
+        source: 'amap',
+        // 高德没有官方深色瓦片，深色主题靠图层调色压暗
+        paint: dark
+          ? {
+              'raster-saturation': -0.82,
+              'raster-contrast': 0.32,
+              'raster-brightness-max': 0.52,
+            }
+          : {},
+      },
+    ],
   }
 }
 
@@ -84,6 +100,7 @@ export default function GlobePage() {
   const mapRef = useRef(null)
   const markersRef = useRef([])
   const markersGroupRef = useRef(null)
+  const fittedRef = useRef(false)
   const [dark, setDark] = useState(false)
   const [annotationOpen, setAnnotationOpen] = useState(false)
   const [annotation, setAnnotation] = useState('default')
@@ -176,6 +193,22 @@ export default function GlobePage() {
     setDark(isDark)
     map.setStyle(styleFor(isDark))
   }, [mode])
+
+  // 首次拿到坐标后，视野收拢到照片实际分布范围
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || fittedRef.current || geoPhotos.length === 0) return
+    const lats = geoPhotos.map((p) => p.latitude)
+    const lons = geoPhotos.map((p) => p.longitude)
+    fittedRef.current = true
+    map.fitBounds(
+      [
+        [Math.min(...lons), Math.min(...lats)],
+        [Math.max(...lons), Math.max(...lats)],
+      ],
+      { padding: 56, maxZoom: 11, duration: 0 },
+    )
+  }, [geoPhotos])
 
   // 标记渲染（屏幕网格聚合）
   useEffect(() => {

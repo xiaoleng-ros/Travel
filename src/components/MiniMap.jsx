@@ -2,22 +2,37 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
+const AMAP_TILES = [1, 2, 3, 4].map(
+  (n) =>
+    `https://webrd0${n}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}`,
+)
+
 function styleFor(dark) {
   return {
     version: 8,
     sources: {
-      carto: {
+      amap: {
         type: 'raster',
-        tiles: [
-          dark
-            ? 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-            : 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        ],
+        tiles: AMAP_TILES,
         tileSize: 256,
-        attribution: '© OpenStreetMap © CARTO',
+        maxzoom: 18,
+        attribution: '© 高德地图',
       },
     },
-    layers: [{ id: 'carto', type: 'raster', source: 'carto' }],
+    layers: [
+      {
+        id: 'amap',
+        type: 'raster',
+        source: 'amap',
+        paint: dark
+          ? {
+              'raster-saturation': -0.82,
+              'raster-contrast': 0.32,
+              'raster-brightness-max': 0.52,
+            }
+          : {},
+      },
+    ],
   }
 }
 
