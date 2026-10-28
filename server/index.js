@@ -48,7 +48,7 @@ const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many attempts, please try again later.' },
+  message: { message: '尝试次数过多，请稍后再试。' },
 })
 
 function createSession(user) {
@@ -82,7 +82,7 @@ function attachUser(req, _res, next) {
 app.use(attachUser)
 
 function requireAuth(req, res, next) {
-  if (!req.user) return res.status(401).json({ message: 'Unauthorized' })
+  if (!req.user) return res.status(401).json({ message: '请先登录。' })
   next()
 }
 
@@ -176,13 +176,13 @@ function publicAlbum(album) {
 app.post('/api/login', authLimiter, (req, res) => {
   const { email, password } = req.body || {}
   if (typeof email !== 'string' || typeof password !== 'string') {
-    return res.status(400).json({ message: 'Email and password are required.' })
+    return res.status(400).json({ message: '请填写邮箱和密码。' })
   }
   const user = getDb().users.find(
     (u) => u.email.toLowerCase() === email.trim().toLowerCase() || u.username === email.trim(),
   )
   if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-    return res.status(401).json({ message: 'Invalid email or password.' })
+    return res.status(401).json({ message: '邮箱或密码不正确。' })
   }
   const token = createSession(user)
   res.cookie('memora_session', token, {
@@ -210,13 +210,13 @@ app.post('/api/profile', requireAuth, (req, res) => {
   const user = req.user
   if (username !== undefined) {
     if (typeof username !== 'string' || username.trim().length < 2) {
-      return res.status(400).json({ message: 'Username is too short.' })
+      return res.status(400).json({ message: '用户名太短。' })
     }
     user.username = username.trim().slice(0, 40)
   }
   if (email !== undefined) {
     if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ message: 'Invalid email address.' })
+      return res.status(400).json({ message: '邮箱格式不正确。' })
     }
     user.email = email.trim()
   }
@@ -228,13 +228,13 @@ app.post('/api/profile', requireAuth, (req, res) => {
 app.post('/api/change-password', requireAuth, (req, res) => {
   const { currentPassword, newPassword } = req.body || {}
   if (!currentPassword || !newPassword) {
-    return res.status(400).json({ message: 'Both passwords are required.' })
+    return res.status(400).json({ message: '请填写两个密码。' })
   }
   if (!bcrypt.compareSync(currentPassword, req.user.passwordHash)) {
-    return res.status(400).json({ message: 'Current password is incorrect.' })
+    return res.status(400).json({ message: '当前密码不正确。' })
   }
   if (String(newPassword).length < 6) {
-    return res.status(400).json({ message: 'New password must be at least 6 characters.' })
+    return res.status(400).json({ message: '新密码至少 6 位。' })
   }
   req.user.passwordHash = bcrypt.hashSync(newPassword, 10)
   req.user.passwordChangedAt = new Date().toISOString()
@@ -257,7 +257,7 @@ app.get('/api/photos', (req, res) => {
 
 app.get('/api/photos/:id', (req, res) => {
   const photo = findPhoto(req.params.id)
-  if (!photo || photo.hidden) return res.status(404).json({ message: 'Photo not found.' })
+  if (!photo || photo.hidden) return res.status(404).json({ message: '照片不存在。' })
   res.json(publicPhoto(photo))
 })
 
@@ -267,7 +267,7 @@ app.get('/api/albums', (_req, res) => {
 
 app.get('/api/albums/:id', (req, res) => {
   const album = findAlbum(req.params.id)
-  if (!album) return res.status(404).json({ message: 'Album not found.' })
+  if (!album) return res.status(404).json({ message: '相册不存在。' })
   res.json(publicAlbum(album))
 })
 
@@ -283,7 +283,7 @@ app.post('/api/photos/:id/reactions', (req, res) => {
   const { type, fingerprint } = req.body || {}
   const allowed = ['like', 'love', 'amazing', 'funny', 'wow', 'sad', 'fire', 'sparkle']
   if (!allowed.includes(type) || typeof fingerprint !== 'string') {
-    return res.status(400).json({ message: 'Invalid reaction.' })
+    return res.status(400).json({ message: '表态类型无效。' })
   }
   const db = getDb()
   const index = db.reactions.findIndex(
@@ -373,7 +373,7 @@ function round(value, digits = 2) {
 
 app.post('/api/admin/upload', requireAuth, upload.array('files', 12), async (req, res) => {
   const files = req.files || []
-  if (!files.length) return res.status(400).json({ message: 'No files uploaded.' })
+  if (!files.length) return res.status(400).json({ message: '没有选择文件。' })
   const albumId = req.body?.albumId ? Number(req.body.albumId) : null
   const created = []
 
@@ -499,7 +499,7 @@ app.post('/api/admin/upload', requireAuth, upload.array('files', 12), async (req
 
 app.patch('/api/admin/photos/:id', requireAuth, (req, res) => {
   const photo = findPhoto(req.params.id)
-  if (!photo) return res.status(404).json({ message: 'Photo not found.' })
+  if (!photo) return res.status(404).json({ message: '照片不存在。' })
   const body = req.body || {}
   const patch = {}
   if (body.title !== undefined) patch.title = String(body.title).slice(0, 200)
@@ -531,19 +531,19 @@ app.patch('/api/admin/photos/:id', requireAuth, (req, res) => {
 
 app.delete('/api/admin/photos/:id', requireAuth, (req, res) => {
   const photo = moveToTrash(req.params.id)
-  if (!photo) return res.status(404).json({ message: 'Photo not found.' })
+  if (!photo) return res.status(404).json({ message: '照片不存在。' })
   res.json({ success: true })
 })
 
 app.post('/api/admin/photos/:id/restore', requireAuth, (req, res) => {
   const photo = restorePhoto(req.params.id)
-  if (!photo) return res.status(404).json({ message: 'Photo not found in trash.' })
+  if (!photo) return res.status(404).json({ message: '回收站里没有这张照片。' })
   res.json({ success: true, photo: publicPhoto(photo) })
 })
 
 app.delete('/api/admin/photos/:id/purge', requireAuth, (req, res) => {
   const photo = purgePhoto(req.params.id)
-  if (!photo) return res.status(404).json({ message: 'Photo not found in trash.' })
+  if (!photo) return res.status(404).json({ message: '回收站里没有这张照片。' })
   for (const url of [photo.originalUrl, photo.thumbnailUrl]) {
     if (typeof url === 'string' && url.startsWith('/uploads/')) {
       try {
@@ -576,7 +576,7 @@ app.get('/api/admin/albums', requireAuth, (_req, res) => {
 app.post('/api/admin/albums', requireAuth, (req, res) => {
   const { title, description = '' } = req.body || {}
   if (typeof title !== 'string' || !title.trim()) {
-    return res.status(400).json({ message: 'Album title is required.' })
+    return res.status(400).json({ message: '请填写相册标题。' })
   }
   const db = getDb()
   const album = {
@@ -598,7 +598,7 @@ app.post('/api/admin/albums', requireAuth, (req, res) => {
 
 app.patch('/api/admin/albums/:id', requireAuth, (req, res) => {
   const album = getDb().albums.find((a) => a.id === Number(req.params.id))
-  if (!album) return res.status(404).json({ message: 'Album not found.' })
+  if (!album) return res.status(404).json({ message: '相册不存在。' })
   const { title, description, coverPhotoId, isHidden } = req.body || {}
   if (title !== undefined) album.title = String(title).trim().slice(0, 120)
   if (description !== undefined) album.description = String(description).slice(0, 1000)
@@ -613,7 +613,7 @@ app.delete('/api/admin/albums/:id', requireAuth, (req, res) => {
   const db = getDb()
   const id = Number(req.params.id)
   const index = db.albums.findIndex((a) => a.id === id)
-  if (index === -1) return res.status(404).json({ message: 'Album not found.' })
+  if (index === -1) return res.status(404).json({ message: '相册不存在。' })
   db.albums.splice(index, 1)
   db.albumPhotos = db.albumPhotos.filter((ap) => ap.albumId !== id)
   for (const photo of db.photos) {
@@ -625,7 +625,7 @@ app.delete('/api/admin/albums/:id', requireAuth, (req, res) => {
 
 app.put('/api/admin/albums/:id/photos', requireAuth, (req, res) => {
   const album = findAlbum(req.params.id)
-  if (!album) return res.status(404).json({ message: 'Album not found.' })
+  if (!album) return res.status(404).json({ message: '相册不存在。' })
   const photoIds = Array.isArray(req.body?.photoIds) ? req.body.photoIds : []
   const db = getDb()
   db.albumPhotos = db.albumPhotos.filter((ap) => ap.albumId !== album.id)
@@ -644,7 +644,7 @@ app.put('/api/admin/albums/:id/photos', requireAuth, (req, res) => {
 
 app.patch('/api/admin/albums/:id/reorder', requireAuth, (req, res) => {
   const album = findAlbum(req.params.id)
-  if (!album) return res.status(404).json({ message: 'Album not found.' })
+  if (!album) return res.status(404).json({ message: '相册不存在。' })
   const ids = Array.isArray(req.body?.photoIds) ? req.body.photoIds : []
   const db = getDb()
   db.albumPhotos = db.albumPhotos.filter((ap) => ap.albumId !== album.id)
@@ -674,14 +674,22 @@ if (fs.existsSync(distDir)) {
 
 app.use((req, res) => {
   if (req.path.startsWith('/api')) {
-    return res.status(404).json({ message: 'Not Found' })
+    return res.status(404).json({ message: '页面不存在。' })
   }
-  res.status(404).send('Not Found')
+  res.status(404).send('页面不存在。')
 })
+
+const UPLOAD_LIMIT_MESSAGES = {
+  LIMIT_FILE_SIZE: '文件超过 40MB 上限。',
+  LIMIT_FILE_COUNT: '一次最多上传 12 个文件。',
+  LIMIT_UNEXPECTED_FILE: '上传字段名不正确。',
+}
 
 app.use((err, _req, res, _next) => {
   console.error('[server]', err)
-  res.status(500).json({ message: err?.message || 'Internal Server Error' })
+  res.status(500).json({
+    message: UPLOAD_LIMIT_MESSAGES[err?.code] || '服务器出错，请稍后重试。',
+  })
 })
 
 app.listen(PORT, () => {

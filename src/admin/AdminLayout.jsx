@@ -14,19 +14,21 @@ import {
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
+import { useLocale } from '../context/LocaleContext'
 
 const NAV = [
-  { to: '/dashboard', label: 'Overview', icon: IconChartBar, end: true },
-  { to: '/dashboard/photos', label: 'Photos', icon: IconPhoto },
-  { to: '/dashboard/albums', label: 'Albums', icon: IconFolders },
-  { to: '/dashboard/trash', label: 'Trash', icon: IconTrash },
-  { to: '/dashboard/settings', label: 'Settings', icon: IconSettings },
-  { to: '/dashboard/account', label: 'Account', icon: IconUser },
+  { to: '/dashboard', labelKey: 'admin.overview', icon: IconChartBar, end: true },
+  { to: '/dashboard/photos', labelKey: 'admin.photos', icon: IconPhoto },
+  { to: '/dashboard/albums', labelKey: 'admin.albums', icon: IconFolders },
+  { to: '/dashboard/trash', labelKey: 'admin.trash', icon: IconTrash },
+  { to: '/dashboard/settings', labelKey: 'admin.settings', icon: IconSettings },
+  { to: '/dashboard/account', labelKey: 'admin.account', icon: IconUser },
 ]
 
 export default function AdminLayout() {
   const { user, logout } = useAuth()
   const { getSetting } = useSettings()
+  const { t } = useLocale()
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -92,7 +94,7 @@ export default function AdminLayout() {
               }
             >
               <item.icon size={17} />
-              {item.label}
+              {t(item.labelKey)}
             </NavLink>
           ))}
         </nav>
@@ -104,7 +106,7 @@ export default function AdminLayout() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-neutral-800 dark:text-neutral-100">
-                {user?.username || 'Admin'}
+                {user?.username || t('admin.roleAdmin')}
               </p>
               <p className="truncate text-[11px] text-neutral-400">{user?.email}</p>
             </div>
@@ -115,7 +117,7 @@ export default function AdminLayout() {
             className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition hover:bg-red-50 dark:hover:bg-red-950/40"
           >
             <IconLogout size={17} />
-            Sign Out
+            {t('signOut')}
           </button>
         </div>
       </aside>
@@ -131,14 +133,14 @@ export default function AdminLayout() {
             <IconMenu2 size={20} />
           </button>
           <h1 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            {current?.label || 'Dashboard'}
+            {current ? t(current.labelKey) : t('dashboard')}
           </h1>
           <Link
             to="/"
             className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
           >
             <IconExternalLink size={14} />
-            Visit site
+            {t('admin.visitSite')}
           </Link>
         </header>
 

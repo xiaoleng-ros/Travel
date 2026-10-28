@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { IconPhoto, IconFolders, IconDatabase, IconTag } from '@tabler/icons-react'
 import { api } from '../lib/api'
 import { formatBytes, formatDate, thumbnailFor } from '../lib/format'
+import { useLocale } from '../context/LocaleContext'
 
 function StatCard({ icon: Icon, label, value, sub }) {
   return (
@@ -22,6 +23,7 @@ function StatCard({ icon: Icon, label, value, sub }) {
 export default function AdminOverview() {
   const [stats, setStats] = useState(null)
   const [error, setError] = useState('')
+  const { t } = useLocale()
 
   useEffect(() => {
     api
@@ -31,21 +33,34 @@ export default function AdminOverview() {
   }, [])
 
   if (error) return <p className="text-sm text-red-500">{error}</p>
-  if (!stats) return <p className="text-sm text-neutral-500">Loading…</p>
+  if (!stats) return <p className="text-sm text-neutral-500">{t('admin.loading')}</p>
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={IconPhoto} label="Photos" value={stats.photos} sub={`${stats.hidden || 0} hidden`} />
-        <StatCard icon={IconFolders} label="Albums" value={stats.albumSummary?.length ?? 0} />
-        <StatCard icon={IconDatabase} label="Storage" value={formatBytes(stats.storageBytes)} />
-        <StatCard icon={IconTag} label="Tags" value={stats.tags?.length ?? 0} />
+        <StatCard
+          icon={IconPhoto}
+          label={t('admin.photos')}
+          value={stats.photos}
+          sub={t('admin.hidden', { count: stats.hidden || 0 })}
+        />
+        <StatCard
+          icon={IconFolders}
+          label={t('admin.albums')}
+          value={stats.albumSummary?.length ?? 0}
+        />
+        <StatCard
+          icon={IconDatabase}
+          label={t('admin.storage')}
+          value={formatBytes(stats.storageBytes)}
+        />
+        <StatCard icon={IconTag} label={t('tags')} value={stats.tags?.length ?? 0} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <section className="card p-4 xl:col-span-2">
           <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            Recent photos
+            {t('admin.recentPhotos')}
           </h2>
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-4">
             {stats.recentPhotos?.map((photo) => (
@@ -63,14 +78,14 @@ export default function AdminOverview() {
               </Link>
             ))}
             {!stats.recentPhotos?.length && (
-              <p className="col-span-4 text-sm text-neutral-400">No photos yet</p>
+              <p className="col-span-4 text-sm text-neutral-400">{t('noPhotos')}</p>
             )}
           </div>
         </section>
 
         <section className="card p-4">
           <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            Albums
+            {t('admin.albums')}
           </h2>
           <ul className="space-y-2">
             {stats.albumSummary?.map((album) => {
@@ -85,12 +100,14 @@ export default function AdminOverview() {
                   <span className="min-w-0 flex-1 truncate text-sm text-neutral-700 dark:text-neutral-200">
                     {album.title}
                   </span>
-                  <span className="text-xs text-neutral-400">{album.count} photos</span>
+                  <span className="text-xs text-neutral-400">
+                    {t('album.photos', { count: album.count })}
+                  </span>
                 </li>
               )
             })}
             {!stats.albumSummary?.length && (
-              <li className="text-sm text-neutral-400">No albums yet</li>
+              <li className="text-sm text-neutral-400">{t('admin.noAlbumsYet')}</li>
             )}
           </ul>
         </section>
@@ -99,7 +116,7 @@ export default function AdminOverview() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <section className="card p-4">
           <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            Popular tags
+            {t('admin.popularTags')}
           </h2>
           <div className="flex flex-wrap gap-1.5">
             {stats.recentTags?.map((tag) => (
@@ -110,13 +127,15 @@ export default function AdminOverview() {
                 {tag}
               </span>
             ))}
-            {!stats.recentTags?.length && <p className="text-sm text-neutral-400">No tags</p>}
+            {!stats.recentTags?.length && (
+              <p className="text-sm text-neutral-400">{t('admin.noTags')}</p>
+            )}
           </div>
         </section>
 
         <section className="card p-4">
           <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            Cameras
+            {t('cameras')}
           </h2>
           <ul className="space-y-1.5">
             {stats.cameras?.slice(0, 8).map((camera) => (
@@ -127,7 +146,9 @@ export default function AdminOverview() {
                 {camera}
               </li>
             ))}
-            {!stats.cameras?.length && <li className="text-sm text-neutral-400">Unknown</li>}
+            {!stats.cameras?.length && (
+              <li className="text-sm text-neutral-400">{t('admin.unknown')}</li>
+            )}
           </ul>
         </section>
       </div>

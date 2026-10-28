@@ -12,7 +12,7 @@ async function request(path, options = {}) {
   const contentType = response.headers.get('content-type') || ''
   const data = contentType.includes('application/json') ? await response.json() : null
   if (!response.ok) {
-    const error = new Error(data?.message || `Request failed (${response.status})`)
+    const error = new Error(data?.message || `请求失败（${response.status}）`)
     error.status = response.status
     error.data = data
     throw error
@@ -48,9 +48,9 @@ export async function uploadPhotos(files, { albumId, onProgress } = {}) {
         data = JSON.parse(xhr.responseText)
       } catch {}
       if (xhr.status >= 200 && xhr.status < 300) resolve(data)
-      else reject(new Error(data?.message || 'Upload failed'))
+      else reject(new Error(data?.message || '上传失败'))
     }
-    xhr.onerror = () => reject(new Error('Upload failed'))
+    xhr.onerror = () => reject(new Error('上传失败'))
     xhr.send(form)
   })
 }

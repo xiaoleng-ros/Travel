@@ -12,10 +12,12 @@ import {
 } from '@tabler/icons-react'
 import { api, uploadPhotos } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { useLocale } from '../context/LocaleContext'
 import { formatBytes, formatDateTime, thumbnailFor } from '../lib/format'
 
 function EditDialog({ photo, albums, onClose, onSaved }) {
   const { push } = useToast()
+  const { t } = useLocale()
   const [title, setTitle] = useState(photo.title || '')
   const [description, setDescription] = useState(photo.description || '')
   const [tags, setTags] = useState((photo.tags || []).join(', '))
@@ -35,14 +37,17 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
       await api.patch(`/api/admin/photos/${photo.id}`, {
         title,
         description,
-        tags: tags.split(/[,，]/).map((t) => t.trim()).filter(Boolean),
+        tags: tags
+          .split(/[,，]/)
+          .map((tag) => tag.trim())
+          .filter(Boolean),
         rating,
         city,
         country,
         hidden,
         albumIds,
       })
-      push('Photo updated')
+      push(t('admin.photoUpdated'))
       onSaved()
       onClose()
     } catch (err) {
@@ -53,10 +58,10 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
   }
 
   const remove = async () => {
-    if (!window.confirm(`Move "${photo.title || photo.id}" to trash?`)) return
+    if (!window.confirm(t('admin.confirmMoveOne', { title: photo.title || photo.id }))) return
     try {
       await api.delete(`/api/admin/photos/${photo.id}`)
-      push('Moved to trash')
+      push(t('admin.movedToTrash'))
       onSaved()
       onClose()
     } catch (err) {
@@ -69,7 +74,7 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
       <div className="card max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            Edit photo
+            {t('admin.editPhoto')}
           </h2>
           <button
             type="button"
@@ -100,12 +105,14 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
 
         <div className="space-y-3">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Title</span>
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+              {t('admin.title')}
+            </span>
             <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
-              Description
+              {t('admin.description')}
             </span>
             <textarea
               className="field min-h-20"
@@ -115,12 +122,14 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
-              Tags (comma separated)
+              {t('admin.tagsField')}
             </span>
             <input className="field" value={tags} onChange={(e) => setTags(e.target.value)} />
           </label>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Rating</span>
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+              {t('admin.rating')}
+            </span>
             {[1, 2, 3, 4, 5].map((value) => (
               <button
                 key={value}
@@ -134,18 +143,22 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">City</span>
+              <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+                {t('admin.city')}
+              </span>
               <input className="field" value={city} onChange={(e) => setCity(e.target.value)} />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
-                Country
+                {t('admin.country')}
               </span>
               <input className="field" value={country} onChange={(e) => setCountry(e.target.value)} />
             </label>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Albums</span>
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+              {t('admin.albums')}
+            </span>
             <div className="flex flex-wrap gap-1.5">
               {albums.map((album) => (
                 <button
@@ -169,7 +182,7 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
             />
             <span className="flex items-center gap-1 text-xs font-medium text-neutral-600 dark:text-neutral-300">
               <IconEyeOff size={14} />
-              Hidden from gallery
+              {t('admin.hiddenFromGallery')}
             </span>
           </label>
         </div>
@@ -182,13 +195,13 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
             className="btn btn-primary flex-1 justify-center"
           >
             {saving && <IconLoader2 size={16} className="animate-spin" />}
-            Save
+            {t('admin.save')}
           </button>
           <button
             type="button"
             onClick={remove}
             className="btn btn-danger justify-center"
-            aria-label="Delete"
+            aria-label={t('admin.delete')}
           >
             <IconTrash size={16} />
           </button>
@@ -200,6 +213,7 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
 
 export default function AdminPhotos() {
   const { push } = useToast()
+  const { t } = useLocale()
   const [photos, setPhotos] = useState(null)
   const [albums, setAlbums] = useState([])
   const [search, setSearch] = useState('')
@@ -247,7 +261,7 @@ export default function AdminPhotos() {
     setProgress(0)
     try {
       await uploadPhotos(files, { onProgress: setProgress })
-      push(`Uploaded ${files.length} photo(s)`)
+      push(t('admin.uploadedCount', { count: files.length }))
       load()
     } catch (err) {
       push(err.message, 'error')
@@ -260,10 +274,10 @@ export default function AdminPhotos() {
 
   const batchDelete = async () => {
     if (!selected.size) return
-    if (!window.confirm(`Move ${selected.size} photo(s) to trash?`)) return
+    if (!window.confirm(t('admin.confirmMoveMany', { count: selected.size }))) return
     try {
       await api.post('/api/admin/photos/batch-delete', { ids: [...selected] })
-      push(`Moved ${selected.size} photo(s) to trash`)
+      push(t('admin.movedMany', { count: selected.size }))
       setSelected(new Set())
       load()
     } catch (err) {
@@ -271,7 +285,7 @@ export default function AdminPhotos() {
     }
   }
 
-  if (!photos) return <p className="text-sm text-neutral-500">Loading…</p>
+  if (!photos) return <p className="text-sm text-neutral-500">{t('admin.loading')}</p>
 
   return (
     <div className="space-y-4">
@@ -283,17 +297,19 @@ export default function AdminPhotos() {
           />
           <input
             className="field w-56 pl-8"
-            placeholder="Search photos"
+            placeholder={t('admin.searchPhotos')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <span className="text-xs text-neutral-400">{filtered.length} photos</span>
+        <span className="text-xs text-neutral-400">
+          {t('album.photos', { count: filtered.length })}
+        </span>
         <div className="ml-auto flex items-center gap-2">
           {selected.size > 0 && (
             <button type="button" onClick={batchDelete} className="btn btn-danger">
               <IconTrash size={15} />
-              Delete ({selected.size})
+              {t('admin.delete')} ({selected.size})
             </button>
           )}
           <button
@@ -302,8 +318,14 @@ export default function AdminPhotos() {
             disabled={uploading}
             className="btn btn-primary"
           >
-            {uploading ? <IconLoader2 size={16} className="animate-spin" /> : <IconCloudUpload size={16} />}
-            {uploading ? `Uploading ${progress}%` : 'Upload photos'}
+            {uploading ? (
+              <IconLoader2 size={16} className="animate-spin" />
+            ) : (
+              <IconCloudUpload size={16} />
+            )}
+            {uploading
+              ? t('admin.uploadingProgress', { percent: progress })
+              : t('admin.upload')}
           </button>
           <input
             ref={fileRef}
@@ -368,7 +390,7 @@ export default function AdminPhotos() {
       </div>
 
       {!filtered.length && (
-        <p className="py-16 text-center text-sm text-neutral-400">No photos</p>
+        <p className="py-16 text-center text-sm text-neutral-400">{t('admin.noPhotos')}</p>
       )}
 
       {editing && (

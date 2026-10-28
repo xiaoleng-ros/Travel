@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { IconPlus, IconPencil, IconTrash, IconX, IconLoader2, IconCheck } from '@tabler/icons-react'
 import { api } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { useLocale } from '../context/LocaleContext'
 import { thumbnailFor } from '../lib/format'
 
 function AlbumDialog({ album, photos, onClose, onSaved }) {
   const { push } = useToast()
+  const { t } = useLocale()
   const isNew = !album
   const [title, setTitle] = useState(album?.title || '')
   const [description, setDescription] = useState(album?.description || '')
@@ -21,7 +23,7 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
     })
 
   const save = async () => {
-    if (!title.trim()) return push('Title is required', 'error')
+    if (!title.trim()) return push(t('admin.titleRequired'), 'error')
     setSaving(true)
     try {
       if (isNew) {
@@ -29,11 +31,11 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
         if (photoIds.size) {
           await api.put(`/api/admin/albums/${res.album.id}/photos`, { photoIds: [...photoIds] })
         }
-        push('Album created')
+        push(t('admin.albumCreated'))
       } else {
         await api.patch(`/api/admin/albums/${album.id}`, { title, description })
         await api.put(`/api/admin/albums/${album.id}/photos`, { photoIds: [...photoIds] })
-        push('Album updated')
+        push(t('admin.albumUpdated'))
       }
       onSaved()
       onClose()
@@ -49,7 +51,7 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
       <div className="card flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            {isNew ? 'New album' : 'Edit album'}
+            {isNew ? t('admin.newAlbum') : t('admin.editAlbum')}
           </h2>
           <button
             type="button"
@@ -62,12 +64,14 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
 
         <div className="space-y-3">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Title</span>
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+              {t('admin.title')}
+            </span>
             <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
-              Description
+              {t('admin.description')}
             </span>
             <textarea
               className="field min-h-16"
@@ -77,7 +81,7 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
           </label>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
-              Photos ({photoIds.size} selected · first selected becomes cover)
+              {t('admin.photosSelected', { count: photoIds.size })}
             </span>
             <div className="grid max-h-64 grid-cols-6 gap-1.5 overflow-y-auto rounded-lg border border-neutral-200 p-2 dark:border-neutral-700">
               {photos.map((photo) => {
@@ -106,7 +110,7 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="btn btn-soft">
-            Cancel
+            {t('admin.cancel')}
           </button>
           <button
             type="button"
@@ -115,7 +119,7 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
             className="btn btn-primary justify-center"
           >
             {saving && <IconLoader2 size={16} className="animate-spin" />}
-            Save
+            {t('admin.save')}
           </button>
         </div>
       </div>
@@ -125,6 +129,7 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
 
 export default function AdminAlbums() {
   const { push } = useToast()
+  const { t } = useLocale()
   const [albums, setAlbums] = useState(null)
   const [photos, setPhotos] = useState([])
   const [editing, setEditing] = useState(null)
@@ -141,24 +146,24 @@ export default function AdminAlbums() {
   useEffect(load, [])
 
   const remove = async (album) => {
-    if (!window.confirm(`Delete album "${album.title}"? Photos will be kept.`)) return
+    if (!window.confirm(t('admin.confirmDeleteAlbum', { title: album.title }))) return
     try {
       await api.delete(`/api/admin/albums/${album.id}`)
-      push('Album deleted')
+      push(t('admin.albumDeleted'))
       load()
     } catch (err) {
       push(err.message, 'error')
     }
   }
 
-  if (!albums) return <p className="text-sm text-neutral-500">Loading…</p>
+  if (!albums) return <p className="text-sm text-neutral-500">{t('admin.loading')}</p>
 
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
         <button type="button" onClick={() => setEditing(null)} className="btn btn-primary">
           <IconPlus size={16} />
-          New album
+          {t('admin.newAlbum')}
         </button>
       </div>
 
@@ -177,7 +182,7 @@ export default function AdminAlbums() {
                   />
                 )}
                 <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">
-                  {album.photoIds?.length || 0} photos
+                  {t('album.photos', { count: album.photoIds?.length || 0 })}
                 </span>
               </div>
               <div className="p-4">
@@ -194,13 +199,13 @@ export default function AdminAlbums() {
                     className="btn btn-soft flex-1 justify-center"
                   >
                     <IconPencil size={15} />
-                    Edit
+                    {t('admin.edit')}
                   </button>
                   <button
                     type="button"
                     onClick={() => remove(album)}
                     className="btn btn-danger justify-center"
-                    aria-label="Delete album"
+                    aria-label={t('admin.deleteAlbum')}
                   >
                     <IconTrash size={15} />
                   </button>
@@ -211,7 +216,9 @@ export default function AdminAlbums() {
         })}
       </div>
 
-      {!albums.length && <p className="py-16 text-center text-sm text-neutral-400">No albums</p>}
+      {!albums.length && (
+        <p className="py-16 text-center text-sm text-neutral-400">{t('admin.noAlbums')}</p>
+      )}
 
       {editing !== null && (
         <AlbumDialog

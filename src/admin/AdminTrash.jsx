@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { IconRestore, IconTrashX, IconLoader2 } from '@tabler/icons-react'
 import { api } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { useLocale } from '../context/LocaleContext'
 import { formatBytes, formatDateTime, thumbnailFor } from '../lib/format'
 
 export default function AdminTrash() {
   const { push } = useToast()
+  const { t } = useLocale()
   const [items, setItems] = useState(null)
   const [busy, setBusy] = useState('')
 
@@ -22,7 +24,7 @@ export default function AdminTrash() {
     setBusy(photo.id)
     try {
       await api.post(`/api/admin/photos/${photo.id}/restore`)
-      push('Photo restored')
+      push(t('admin.photoRestored'))
       load()
     } catch (err) {
       push(err.message, 'error')
@@ -32,12 +34,11 @@ export default function AdminTrash() {
   }
 
   const purge = async (photo) => {
-    if (!window.confirm(`Permanently delete "${photo.title || photo.id}"? This cannot be undone.`))
-      return
+    if (!window.confirm(t('admin.confirmPurge', { title: photo.title || photo.id }))) return
     setBusy(photo.id)
     try {
       await api.delete(`/api/admin/photos/${photo.id}/purge`)
-      push('Photo permanently deleted')
+      push(t('admin.photoPurged'))
       load()
     } catch (err) {
       push(err.message, 'error')
@@ -46,13 +47,11 @@ export default function AdminTrash() {
     }
   }
 
-  if (!items) return <p className="text-sm text-neutral-500">Loading…</p>
+  if (!items) return <p className="text-sm text-neutral-500">{t('admin.loading')}</p>
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-neutral-400">
-        {items.length} item(s) in trash. Permanently deleted files cannot be recovered.
-      </p>
+      <p className="text-xs text-neutral-400">{t('admin.trashCount', { count: items.length })}</p>
       <div className="space-y-2">
         {items.map((photo) => (
           <div
@@ -70,7 +69,8 @@ export default function AdminTrash() {
                 {photo.title || photo.id}
               </p>
               <p className="text-xs text-neutral-400">
-                {formatBytes(photo.fileSize)} · deleted {formatDateTime(photo.deletedAt)}
+                {formatBytes(photo.fileSize)} ·{' '}
+                {t('admin.deletedAt', { time: formatDateTime(photo.deletedAt) })}
               </p>
             </div>
             <button
@@ -84,7 +84,7 @@ export default function AdminTrash() {
               ) : (
                 <IconRestore size={15} />
               )}
-              Restore
+              {t('admin.restore')}
             </button>
             <button
               type="button"
@@ -93,13 +93,13 @@ export default function AdminTrash() {
               className="btn btn-danger"
             >
               <IconTrashX size={15} />
-              Delete forever
+              {t('admin.deleteForever')}
             </button>
           </div>
         ))}
       </div>
       {!items.length && (
-        <p className="py-16 text-center text-sm text-neutral-400">Trash is empty</p>
+        <p className="py-16 text-center text-sm text-neutral-400">{t('admin.trashEmpty')}</p>
       )}
     </div>
   )

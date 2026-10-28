@@ -4,10 +4,12 @@ import { IconLoader2, IconLogout } from '@tabler/icons-react'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
+import { useLocale } from '../context/LocaleContext'
 
 export default function AdminAccount() {
   const { user, setUser, logout } = useAuth()
   const { push } = useToast()
+  const { t } = useLocale()
   const navigate = useNavigate()
   const [username, setUsername] = useState(user?.username || '')
   const [email, setEmail] = useState(user?.email || '')
@@ -21,7 +23,7 @@ export default function AdminAccount() {
     try {
       const res = await api.post('/api/profile', { username, email })
       setUser(res.user)
-      push('Profile updated')
+      push(t('admin.profileUpdated'))
     } catch (err) {
       push(err.message, 'error')
     } finally {
@@ -33,7 +35,7 @@ export default function AdminAccount() {
     setSavingPassword(true)
     try {
       await api.post('/api/change-password', { currentPassword, newPassword })
-      push('Password changed')
+      push(t('admin.passwordChanged'))
       setCurrentPassword('')
       setNewPassword('')
     } catch (err) {
@@ -52,17 +54,19 @@ export default function AdminAccount() {
     <div className="max-w-xl space-y-6">
       <section className="card p-5">
         <h2 className="mb-4 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-          Profile
+          {t('admin.profile')}
         </h2>
         <div className="space-y-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
-              Username
+              {t('admin.username')}
             </span>
             <input className="field" value={username} onChange={(e) => setUsername(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Email</span>
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+              {t('admin.email')}
+            </span>
             <input
               className="field"
               type="email"
@@ -78,7 +82,7 @@ export default function AdminAccount() {
               className="btn btn-primary"
             >
               {savingProfile && <IconLoader2 size={16} className="animate-spin" />}
-              Save profile
+              {t('admin.saveProfile')}
             </button>
           </div>
         </div>
@@ -86,12 +90,12 @@ export default function AdminAccount() {
 
       <section className="card p-5">
         <h2 className="mb-4 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-          Change password
+          {t('admin.changePassword')}
         </h2>
         <div className="space-y-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
-              Current password
+              {t('admin.currentPassword')}
             </span>
             <input
               className="field"
@@ -103,7 +107,7 @@ export default function AdminAccount() {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
-              New password
+              {t('admin.newPassword')}
             </span>
             <input
               className="field"
@@ -121,7 +125,7 @@ export default function AdminAccount() {
               className="btn btn-primary"
             >
               {savingPassword && <IconLoader2 size={16} className="animate-spin" />}
-              Change password
+              {t('admin.changePassword')}
             </button>
           </div>
         </div>
@@ -129,14 +133,12 @@ export default function AdminAccount() {
 
       <section className="card p-5">
         <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-          Session
+          {t('admin.session')}
         </h2>
-        <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
-          Sign out of this device. You will need to log in again.
-        </p>
+        <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">{t('admin.signOutHint')}</p>
         <button type="button" onClick={signOut} className="btn btn-danger">
           <IconLogout size={15} />
-          Sign Out
+          {t('signOut')}
         </button>
       </section>
     </div>
