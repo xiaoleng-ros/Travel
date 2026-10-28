@@ -161,7 +161,7 @@ export function FilterMenu({ open, onClose, photos = [] }) {
     cities: [...new Set(photos.map((photo) => photo.city).filter(Boolean))].sort((a, b) =>
       String(a).localeCompare(String(b), 'zh-Hans-CN'),
     ),
-    ratings: ['3', '4', '5'],
+    ratings: [3, 4, 5],
   }
 
   const chips = values[tab] || []
@@ -187,7 +187,7 @@ export function FilterMenu({ open, onClose, photos = [] }) {
               className="rounded-md px-1.5 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-500/10 dark:text-blue-300"
               onClick={clearFilters}
             >
-              Clear
+              {t('clearFilters')}
             </button>
           )}
           <button type="button" className="menu-item !w-7 !p-0" onClick={randomize} title={t('random')}>
