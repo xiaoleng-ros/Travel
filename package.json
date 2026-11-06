@@ -29,6 +29,7 @@
     "maplibre-gl": "^5.9.0",
     "motion": "^12.40.0",
     "multer": "^2.5.0",
+    "proxy-agent": "^5.0.0",
     "qiniu": "^7.15.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
