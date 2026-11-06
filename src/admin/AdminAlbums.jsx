@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
-import { IconPlus, IconPencil, IconTrash, IconX, IconLoader2, IconCheck } from '@tabler/icons-react'
+import {
+  IconPlus,
+  IconPencil,
+  IconTrash,
+  IconX,
+  IconLoader2,
+  IconStarFilled,
+} from '@tabler/icons-react'
 import { api } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { useConfirm } from '../context/ConfirmContext'
 import { useLocale } from '../context/LocaleContext'
 import { thumbnailFor } from '../lib/format'
 
@@ -12,29 +20,40 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
   const [title, setTitle] = useState(album?.title || '')
   const [description, setDescription] = useState(album?.description || '')
   const [photoIds, setPhotoIds] = useState(new Set(album?.photoIds || []))
+  const [coverId, setCoverId] = useState(album?.coverPhotoId || null)
   const [saving, setSaving] = useState(false)
 
-  const togglePhoto = (id) =>
-    setPhotoIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  // 注意：不要在一个 setState 的 updater 里调用另一个 setState —— React 会把这种
+  // 嵌套更新丢掉，封面就永远设不上。这里在 updater 外面算好再分别提交。
+  const togglePhoto = (id) => {
+    const next = new Set(photoIds)
+    if (next.has(id)) {
+      next.delete(id)
+      if (coverId === id) setCoverId(null)
+    } else {
+      next.add(id)
+      // 第一张选中的照片默认当封面
+      if (!coverId) setCoverId(id)
+    }
+    setPhotoIds(next)
+  }
+
+  const coverPhoto = photos.find((photo) => photo.id === coverId)
 
   const save = async () => {
     if (!title.trim()) return push(t('admin.titleRequired'), 'error')
     setSaving(true)
     try {
+      const payload = { photoIds: [...photoIds], coverPhotoId: coverId }
       if (isNew) {
         const res = await api.post('/api/admin/albums', { title, description })
         if (photoIds.size) {
-          await api.put(`/api/admin/albums/${res.album.id}/photos`, { photoIds: [...photoIds] })
+          await api.put(`/api/admin/albums/${res.album.id}/photos`, payload)
         }
         push(t('admin.albumCreated'))
       } else {
         await api.patch(`/api/admin/albums/${album.id}`, { title, description })
-        await api.put(`/api/admin/albums/${album.id}/photos`, { photoIds: [...photoIds] })
+        await api.put(`/api/admin/albums/${album.id}/photos`, payload)
         push(t('admin.albumUpdated'))
       }
       onSaved()
@@ -47,8 +66,14 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="card flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl p-5">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="card flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
             {isNew ? t('admin.newAlbum') : t('admin.editAlbum')}
@@ -56,7 +81,8 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
           <button
             type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600"
+            aria-label={t('admin.cancel')}
+            className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           >
             <IconX size={18} />
           </button>
@@ -80,30 +106,85 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
             />
           </label>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
-              {t('admin.photosSelected', { count: photoIds.size })}
-            </span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+                {t('admin.photosSelected', { count: photoIds.size })}
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] text-neutral-400 dark:text-neutral-500">
+                {t('admin.coverPhoto')}
+                {coverPhoto ? (
+                  <img
+                    src={thumbnailFor(coverPhoto)}
+                    alt=""
+                    className="size-6 rounded object-cover ring-1 ring-neutral-200 dark:ring-neutral-700"
+                  />
+                ) : (
+                  <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">—</span>
+                )}
+              </span>
+            </div>
             <div className="grid max-h-64 grid-cols-6 gap-1.5 overflow-y-auto rounded-lg border border-neutral-200 p-2 dark:border-neutral-700">
               {photos.map((photo) => {
                 const active = photoIds.has(photo.id)
+                const isCover = coverId === photo.id
                 return (
-                  <button
+                  <div
                     key={photo.id}
-                    type="button"
-                    onClick={() => togglePhoto(photo.id)}
                     className={`relative aspect-square overflow-hidden rounded-md bg-neutral-100 dark:bg-neutral-800 ${
-                      active ? 'ring-2 ring-blue-500' : ''
+                      isCover ? 'ring-2 ring-amber-400' : active ? 'ring-2 ring-blue-500' : ''
                     }`}
                   >
-                    <img src={thumbnailFor(photo)} alt="" loading="lazy" className="size-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => togglePhoto(photo.id)}
+                      className="size-full"
+                      aria-pressed={active}
+                      aria-label={photo.title || photo.id}
+                    >
+                      <img
+                        src={thumbnailFor(photo)}
+                        alt=""
+                        loading="lazy"
+                        className="size-full object-cover"
+                      />
+                    </button>
                     {active && (
-                      <span className="absolute right-1 top-1 rounded-full bg-blue-600 p-0.5 text-white">
-                        <IconCheck size={10} />
+                      <button
+                        type="button"
+                        onClick={() => setCoverId(photo.id)}
+                        title={t('admin.coverPhoto')}
+                        aria-label={t('admin.coverPhoto')}
+                        className={`absolute right-0.5 top-0.5 rounded-full p-0.5 transition-colors ${
+                          isCover
+                            ? 'bg-amber-400 text-amber-950'
+                            : 'bg-black/50 text-white hover:bg-black/70'
+                        }`}
+                      >
+                        <IconStarFilled size={10} />
+                      </button>
+                    )}
+                    {isCover && (
+                      <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-amber-400/90 py-0.5 text-center text-[9px] font-medium text-amber-950">
+                        {t('admin.coverPhoto')}
                       </span>
                     )}
-                  </button>
+                  </div>
                 )
               })}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] leading-4 text-neutral-400 dark:text-neutral-500">
+                {t('admin.coverPhotoHint')}
+              </span>
+              {coverId && (
+                <button
+                  type="button"
+                  onClick={() => setCoverId(null)}
+                  className="shrink-0 text-[11px] text-neutral-400 underline-offset-2 hover:underline dark:text-neutral-500"
+                >
+                  {t('admin.cancel')}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -129,10 +210,12 @@ function AlbumDialog({ album, photos, onClose, onSaved }) {
 
 export default function AdminAlbums() {
   const { push } = useToast()
+  const confirm = useConfirm()
   const { t } = useLocale()
   const [albums, setAlbums] = useState(null)
   const [photos, setPhotos] = useState([])
-  const [editing, setEditing] = useState(null)
+  // undefined = 关闭，null = 新建，album 对象 = 编辑
+  const [editing, setEditing] = useState(undefined)
 
   const load = () => {
     Promise.all([api.get('/api/admin/albums'), api.get('/api/photos')])
@@ -146,7 +229,13 @@ export default function AdminAlbums() {
   useEffect(load, [])
 
   const remove = async (album) => {
-    if (!window.confirm(t('admin.confirmDeleteAlbum', { title: album.title }))) return
+    const ok = await confirm({
+      title: t('admin.confirmTitle'),
+      message: t('admin.confirmDeleteAlbum', { title: album.title }),
+      confirmText: t('admin.deleteAlbum'),
+      cancelText: t('admin.cancel'),
+    })
+    if (!ok) return
     try {
       await api.delete(`/api/admin/albums/${album.id}`)
       push(t('admin.albumDeleted'))
@@ -220,7 +309,7 @@ export default function AdminAlbums() {
         <p className="py-16 text-center text-sm text-neutral-400">{t('admin.noAlbums')}</p>
       )}
 
-      {editing !== null && (
+      {editing !== undefined && (
         <AlbumDialog
           album={editing}
           photos={photos}

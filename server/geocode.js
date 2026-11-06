@@ -38,8 +38,28 @@ export function wgs84ToGcj02(lon, lat) {
   return [lon + dLon, lat + dLat]
 }
 
+// 前端底图用的 Key（JS API）。它只能在浏览器里带 securityJsCode 使用，
+// 直接拿去请求 restapi.amap.com 会返回 USERKEY_PLAT_NOMATCH（10009）。
 export function resolveAmapKey(settings) {
   return process.env.AMAP_KEY?.trim() || settings?.map?.['amap.key']?.trim() || ''
+}
+
+// 服务端逆地理编码用的 Key（Web 服务）。高德控制台里这是和 JS API 分开申请的
+// 另一种 Key，两者不能互换。没单独配置时退回旧字段，方便已有部署继续工作。
+export function resolveAmapWebServiceKey(settings) {
+  return (
+    process.env.AMAP_WEB_SERVICE_KEY?.trim() ||
+    settings?.map?.['amap.webServiceKey']?.trim() ||
+    settings?.map?.['amap.key']?.trim() ||
+    ''
+  )
+}
+
+// 高德 JS API 2.0 在 2021-12-02 之后申请的 Key 都需要配合「安全密钥」（securityJsCode）
+// 使用。前端必须在加载 webapi.amap.com/maps 脚本之前把它挂到 window._AMapSecurityConfig，
+// 否则瓦片会以灰色显示，并在控制台报 INVALID_USER_SCODE。REST 逆地理编码不依赖这个。
+export function resolveAmapSecurityCode(settings) {
+  return process.env.AMAP_SECURITY_CODE?.trim() || settings?.map?.['amap.securityCode']?.trim() || ''
 }
 
 function text(value) {
@@ -78,9 +98,11 @@ export async function reverseGeocode({ latitude, longitude, key, timeoutMs = 300
   const district = text(c.district)
   const township = text(c.township)
   const seaArea = text(c.seaArea)
+  // 高德返回的是 snake_case 的 formatted_address，不是 formattedAddress；
+  // 写成驼峰会一直取到 undefined，位置名就退化成「省+区+街道」的拼接。
   const locationName = isCountryLevel
     ? seaArea
-    : text(re.formattedAddress) || [province, district, township].filter(Boolean).join('')
+    : text(re.formatted_address) || text(re.formattedAddress) || [province, district, township].filter(Boolean).join('')
 
   return {
     locationName: locationName || null,

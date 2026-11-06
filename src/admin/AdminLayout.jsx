@@ -17,12 +17,12 @@ import { useSettings } from '../context/SettingsContext'
 import { useLocale } from '../context/LocaleContext'
 
 const NAV = [
-  { to: '/dashboard', labelKey: 'admin.overview', icon: IconChartBar, end: true },
-  { to: '/dashboard/photos', labelKey: 'admin.photos', icon: IconPhoto },
-  { to: '/dashboard/albums', labelKey: 'admin.albums', icon: IconFolders },
-  { to: '/dashboard/trash', labelKey: 'admin.trash', icon: IconTrash },
-  { to: '/dashboard/settings', labelKey: 'admin.settings', icon: IconSettings },
-  { to: '/dashboard/account', labelKey: 'admin.account', icon: IconUser },
+  { to: '/admin', labelKey: 'admin.overview', icon: IconChartBar, end: true },
+  { to: '/admin/photos', labelKey: 'admin.photos', icon: IconPhoto },
+  { to: '/admin/albums', labelKey: 'admin.albums', icon: IconFolders },
+  { to: '/admin/trash', labelKey: 'admin.trash', icon: IconTrash },
+  { to: '/admin/settings', labelKey: 'admin.settings', icon: IconSettings },
+  { to: '/admin/account', labelKey: 'admin.account', icon: IconUser },
 ]
 
 export default function AdminLayout() {
@@ -59,12 +59,17 @@ export default function AdminLayout() {
         }`}
       >
         <div className="flex h-14 items-center justify-between border-b border-neutral-200 px-4 dark:border-neutral-800">
-          <Link to="/dashboard" className="flex items-center gap-2">
-            <img
-              src={getSetting('app:avatarUrl') || '/brand/avatar.webp'}
-              alt=""
-              className="size-7 rounded-full object-cover"
-            />
+          <Link to="/admin" className="flex items-center gap-2">
+            {getSetting('app:avatarUrl') ? (
+              <img
+                src={getSetting('app:avatarUrl')}
+                alt=""
+                className="size-7 rounded-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span className="size-7 rounded-full bg-neutral-100 dark:bg-neutral-800" aria-hidden="true" />
+            )}
             <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
               {getSetting('app:title') || 'Memora'}
             </span>
@@ -101,9 +106,19 @@ export default function AdminLayout() {
 
         <div className="border-t border-neutral-200 p-3 dark:border-neutral-800">
           <div className="flex items-center gap-2.5 px-2 py-1.5">
-            <span className="flex size-8 items-center justify-center rounded-full bg-neutral-200 text-xs font-semibold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-200">
-              {(user?.username || user?.email || 'A').slice(0, 1).toUpperCase()}
-            </span>
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt=""
+                className="size-8 shrink-0 rounded-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span
+                aria-hidden="true"
+                className="size-8 shrink-0 rounded-full bg-neutral-100 ring-1 ring-inset ring-neutral-200 dark:bg-neutral-800 dark:ring-neutral-700"
+              />
+            )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-neutral-800 dark:text-neutral-100">
                 {user?.username || t('admin.roleAdmin')}

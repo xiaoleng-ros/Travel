@@ -13,11 +13,13 @@ import {
 } from '@tabler/icons-react'
 import { api, uploadPhotos } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { useConfirm } from '../context/ConfirmContext'
 import { useLocale } from '../context/LocaleContext'
-import { formatBytes, formatDateTime, thumbnailFor } from '../lib/format'
+import { formatBytes, formatDate, formatDateTime, thumbnailFor } from '../lib/format'
 
 function EditDialog({ photo, albums, onClose, onSaved }) {
   const { push } = useToast()
+  const confirm = useConfirm()
   const { t } = useLocale()
   const [title, setTitle] = useState(photo.title || '')
   const [description, setDescription] = useState(photo.description || '')
@@ -26,7 +28,16 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
   const [city, setCity] = useState(photo.city || '')
   const [country, setCountry] = useState(photo.country || '')
   const [locationName, setLocationName] = useState(photo.locationName || '')
+  const [latitude, setLatitude] = useState(
+    typeof photo.latitude === 'number' ? String(photo.latitude) : '',
+  )
+  const [longitude, setLongitude] = useState(
+    typeof photo.longitude === 'number' ? String(photo.longitude) : '',
+  )
   const [hidden, setHidden] = useState(Boolean(photo.hidden))
+  const [dateTaken, setDateTaken] = useState(
+    photo.dateTaken ? formatDate(photo.dateTaken, 'YYYY-MM-DD') : '',
+  )
   const [albumIds, setAlbumIds] = useState((photo.albumIds || []).map(Number))
   const [saving, setSaving] = useState(false)
   const [detecting, setDetecting] = useState(false)
@@ -48,8 +59,13 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
         city,
         country,
         locationName,
+        // 空字符串交给后端存 null；有值则会被校验范围后写入
+        latitude: latitude.trim() === '' ? null : Number(latitude),
+        longitude: longitude.trim() === '' ? null : Number(longitude),
         hidden,
         albumIds,
+        // 空字符串表示「未知」，后端会存 null；填了日期则覆盖 EXIF 推断
+        dateTaken: dateTaken ? new Date(`${dateTaken}T12:00:00`).toISOString() : null,
       })
       push(t('admin.photoUpdated'))
       onSaved()
@@ -64,7 +80,12 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
   const detect = async () => {
     setDetecting(true)
     try {
-      const res = await api.post(`/api/admin/photos/${photo.id}/geocode`)
+      // 把弹窗里当前填的坐标一起发过去，手改完坐标可以直接识别，不用先保存。
+      const coords =
+        latitude.trim() !== '' && longitude.trim() !== ''
+          ? { latitude: Number(latitude), longitude: Number(longitude) }
+          : {}
+      const res = await api.post(`/api/admin/photos/${photo.id}/geocode`, coords)
       setCity(res.photo.city || '')
       setCountry(res.photo.country || '')
       setLocationName(res.photo.locationName || '')
@@ -77,7 +98,13 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
   }
 
   const remove = async () => {
-    if (!window.confirm(t('admin.confirmMoveOne', { title: photo.title || photo.id }))) return
+    const ok = await confirm({
+      title: t('admin.confirmTitle'),
+      message: t('admin.confirmMoveOne', { title: photo.title || photo.id }),
+      confirmText: t('admin.delete'),
+      cancelText: t('admin.cancel'),
+    })
+    if (!ok) return
     try {
       await api.delete(`/api/admin/photos/${photo.id}`)
       push(t('admin.movedToTrash'))
@@ -89,8 +116,14 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="card max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl p-5">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="card max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
             {t('admin.editPhoto')}
@@ -98,7 +131,8 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
           <button
             type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600"
+            aria-label={t('admin.cancel')}
+            className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           >
             <IconX size={18} />
           </button>
@@ -118,7 +152,7 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
               {photo.width} × {photo.height}
             </p>
             <p>{formatBytes(photo.fileSize)}</p>
-            <p>{formatDateTime(photo.dateTaken)}</p>
+            <p>{photo.dateTaken ? formatDateTime(photo.dateTaken) : t('viewer.unknown')}</p>
           </div>
         </div>
 
@@ -145,6 +179,20 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
             </span>
             <input className="field" value={tags} onChange={(e) => setTags(e.target.value)} />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+              {t('admin.dateTaken')}
+            </span>
+            <input
+              type="date"
+              className="field"
+              value={dateTaken}
+              onChange={(e) => setDateTaken(e.target.value)}
+            />
+            <span className="text-[11px] leading-4 text-neutral-400 dark:text-neutral-500">
+              {t('admin.dateTakenHint')}
+            </span>
+          </label>
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
               {t('admin.rating')}
@@ -159,6 +207,32 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
                 {value <= rating ? <IconStarFilled size={18} /> : <IconStar size={18} />}
               </button>
             ))}
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+              {t('admin.coordinates')}
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                className="field"
+                inputMode="decimal"
+                placeholder={t('admin.latitude')}
+                aria-label={t('admin.latitude')}
+                value={latitude}
+                onChange={(e) => setLatitude(e.target.value)}
+              />
+              <input
+                className="field"
+                inputMode="decimal"
+                placeholder={t('admin.longitude')}
+                aria-label={t('admin.longitude')}
+                value={longitude}
+                onChange={(e) => setLongitude(e.target.value)}
+              />
+            </div>
+            <span className="text-[11px] leading-4 text-neutral-400 dark:text-neutral-500">
+              {t('admin.coordinatesHint')}
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
@@ -257,6 +331,7 @@ function EditDialog({ photo, albums, onClose, onSaved }) {
 
 export default function AdminPhotos() {
   const { push } = useToast()
+  const confirm = useConfirm()
   const { t } = useLocale()
   const [photos, setPhotos] = useState(null)
   const [albums, setAlbums] = useState([])
@@ -304,8 +379,11 @@ export default function AdminPhotos() {
     setUploading(true)
     setProgress(0)
     try {
-      await uploadPhotos(files, { onProgress: setProgress })
-      push(t('admin.uploadedCount', { count: files.length }))
+      const result = await uploadPhotos(files, { onProgress: setProgress })
+      const uploaded = result?.photos?.length ?? files.length
+      if (uploaded) push(t('admin.uploadedCount', { count: uploaded }))
+      const skipped = result?.skipped?.length || 0
+      if (skipped) push(t('admin.uploadSkipped', { count: skipped }), 'info')
       load()
     } catch (err) {
       push(err.message, 'error')
@@ -318,7 +396,13 @@ export default function AdminPhotos() {
 
   const batchDelete = async () => {
     if (!selected.size) return
-    if (!window.confirm(t('admin.confirmMoveMany', { count: selected.size }))) return
+    const ok = await confirm({
+      title: t('admin.confirmTitle'),
+      message: t('admin.confirmMoveMany', { count: selected.size }),
+      confirmText: t('admin.delete'),
+      cancelText: t('admin.cancel'),
+    })
+    if (!ok) return
     try {
       await api.post('/api/admin/photos/batch-delete', { ids: [...selected] })
       push(t('admin.movedMany', { count: selected.size }))

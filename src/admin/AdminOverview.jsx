@@ -66,7 +66,7 @@ export default function AdminOverview() {
             {stats.recentPhotos?.map((photo) => (
               <Link
                 key={photo.id}
-                to="/dashboard/photos"
+                to="/admin/photos"
                 className="group relative aspect-square overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-800"
               >
                 <img

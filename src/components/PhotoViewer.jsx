@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import {
   IconAperture,
@@ -49,8 +49,11 @@ import {
   thumbnailFor,
 } from '../lib/format'
 import ThumbHash from './ThumbHash'
-import MiniMap from './MiniMap'
-import Histogram from './Histogram'
+
+// MiniMap 会连带把 MapLibre（~800KB）拉进来，Histogram 也不小，
+// 这两个只在信息面板真正显示时才需要，所以单独拆包。
+const MiniMap = lazy(() => import('./MiniMap'))
+const Histogram = lazy(() => import('./Histogram'))
 
 const REACTIONS = [
   ['like', '👍'],
@@ -459,19 +462,29 @@ export default function PhotoViewer({ photoId, photos = [], albums = [], onClose
 
             {typeof photo.latitude === 'number' && typeof photo.longitude === 'number' && (
               <div className="h-44 overflow-hidden rounded-lg border border-white/10">
-                <MiniMap
-                  position={photo.gcj02}
-                  dark={dark}
-                />
+                <Suspense fallback={<div className="h-full w-full animate-pulse bg-white/5" />}>
+                  <MiniMap
+                    position={photo.gcj02}
+                    dark={dark}
+                  />
+                </Suspense>
               </div>
             )}
 
             <Section title={t('viewer.basic')}>
-              <Row icon={IconFileDescription} label={t('viewer.filename')} value={basename(photo.storageKey)} />
+              <Row
+                icon={IconFileDescription}
+                label={t('viewer.filename')}
+                value={photo.originalName || basename(photo.storageKey)}
+              />
               <Row icon={IconRuler2} label={t('viewer.fileSize')} value={formatBytes(photo.fileSize)} />
               <Row icon={IconGridDots} label={t('viewer.resolution')} value={`${photo.width} × ${photo.height}`} />
               <Row icon={IconPhoto} label={t('viewer.pixels')} value={formatMegapixels(photo.width, photo.height)} />
-              <Row icon={IconClock} label={t('viewer.shootingTime')} value={formatDateTime(photo.dateTaken)} />
+              <Row
+                icon={IconClock}
+                label={t('viewer.shootingTime')}
+                value={photo.dateTaken ? formatDateTime(photo.dateTaken) : t('viewer.unknown')}
+              />
               <Row icon={IconPalette} label={t('viewer.colorSpace')} value={colorSpaceLabel(exif.ColorSpace)} />
               <Row icon={IconMapPin} label={t('viewer.country')} value={photo.country} />
               <Row icon={IconRoute} label={t('viewer.city')} value={photo.city} />
@@ -533,7 +546,9 @@ export default function PhotoViewer({ photoId, photos = [], albums = [], onClose
 
             <Section title={t('viewer.histogram')}>
               <div className="viewer-card p-2">
-                <Histogram src={photo.thumbnailUrl || photo.originalUrl} seed={photo.id.length} />
+                <Suspense fallback={<div className="h-20 w-full animate-pulse rounded bg-white/5" />}>
+                  <Histogram src={photo.thumbnailUrl || photo.originalUrl} seed={photo.id.length} />
+                </Suspense>
               </div>
             </Section>
 

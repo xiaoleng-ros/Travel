@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import { IconClock } from '@tabler/icons-react'
 import BackPill from '../components/BackPill'
@@ -10,9 +10,14 @@ import { fromNow, thumbnailFor } from '../lib/format'
 
 export default function AlbumDetailPage() {
   const { albumId } = useParams()
-  const { photos, albums, loading } = useGalleryData()
+  const { photos, albums, loading, loadAll } = useGalleryData()
   const { t } = useLocale()
   const [activePhoto, setActivePhoto] = useState(null)
+
+  // 相册详情要展示相册里的所有照片，首页分页只加载了一部分，这里补齐全量。
+  useEffect(() => {
+    loadAll()
+  }, [loadAll])
 
   const album = albums.find((item) => String(item.id) === String(albumId))
   const albumPhotos = useMemo(() => {

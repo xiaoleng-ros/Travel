@@ -13,7 +13,7 @@ import PhotoViewer from '../components/PhotoViewer'
 import { useGalleryData } from '../context/GalleryDataContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLocale } from '../context/LocaleContext'
-import { amapStyle, getMapConfig, loadAmap } from '../lib/amap'
+import { maplibregl, createMapLibreStyle } from '../lib/maplibre'
 import { dayjs, formatExposure, formatFocalLength, thumbnailFor } from '../lib/format'
 
 const ANNOTATIONS = ['default', 'disable', 'focalLength', 'shutter', 'altitude']
@@ -47,16 +47,20 @@ function annotationColor(photo, mode) {
   }
 }
 
-// 高德的 renderMarker / renderCluster 回调在这个版本里不采纳自定义 DOM，聚合改为自己算屏幕网格
+// 用 MapLibre GL + 高德免费栅格瓦片（无需 Key / 安全密钥 / 域名白名单）。
+// 瓦片为 GCJ-02，照片坐标也由服务端转成了 GCJ-02，直接对应。
 export default function GlobePage() {
-  const { photos } = useGalleryData()
+  const { photos, loadAll } = useGalleryData()
   const { mode } = useTheme()
   const { t } = useLocale()
+
+  // 地球页要展示所有带坐标的照片，首页只加载了一页，这里补齐全量。
+  useEffect(() => {
+    loadAll()
+  }, [loadAll])
   const containerRef = useRef(null)
-  const AMapRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef([])
-  const configRef = useRef(null)
   const fittedRef = useRef(false)
   const [dark, setDark] = useState(false)
   const [ready, setReady] = useState(false)
@@ -79,7 +83,8 @@ export default function GlobePage() {
   const sortedPhotos = useMemo(
     () =>
       [...geoPhotos].sort((a, b) =>
-        String(a.dateTaken || '').localeCompare(String(b.dateTaken || '')),
+        // 没有拍摄时间的照片排在最后，而不是被当成空字符串挤到最前面
+        String(a.dateTaken || '9999').localeCompare(String(b.dateTaken || '9999')),
       ),
     [geoPhotos],
   )
@@ -107,40 +112,61 @@ export default function GlobePage() {
     return sortedPhotos.slice(0, index)
   }, [timelineOn, sortedPhotos, index, geoPhotos])
 
-  // 初始化高德地图
+  // 初始化地图
   useEffect(() => {
     let disposed = false
-    loadAmap()
-      .then(async (AMap) => {
-        if (disposed || !containerRef.current) return
-        const config = await getMapConfig()
-        if (disposed) return
-        configRef.current = config
-        const prefersDark = document.documentElement.classList.contains('dark')
-        setDark(prefersDark)
-        const map = new AMap.Map(containerRef.current, {
-          viewMode: '2D',
-          zooms: [3, 18],
-          center: [108, 34],
-          zoom: 4.4,
-          mapStyle: amapStyle(config, prefersDark),
-          resizeEnable: true,
-        })
-        AMapRef.current = AMap
-        mapRef.current = map
-        setReady(true)
+    const container = containerRef.current
+    if (!container) return
+
+    // MapLibre 用的是高德栅格瓦片（走同源代理），不需要高德 JS API 的
+    // Key / securityJsCode，所以这里不再等待 /api/map/config，避免该接口异常时整页卡白。
+    const prefersDark = document.documentElement.classList.contains('dark')
+    setDark(prefersDark)
+
+    let map
+    try {
+      map = new maplibregl.Map({
+        container,
+        style: createMapLibreStyle(prefersDark),
+        center: [108, 34],
+        zoom: 4,
+        minZoom: 3,
+        maxZoom: 18,
+        attributionControl: false,
+        // 容器在首帧可能是 0 尺寸，交给 resize 监听兜底
+        preserveDrawingBuffer: false,
       })
-      .catch((err) => {
-        if (disposed) return
-        setMapError(err?.message || '地图初始化失败')
-      })
+    } catch (err) {
+      setMapError(err?.message || '地图初始化失败')
+      return
+    }
+
+    mapRef.current = map
+    map.addControl(
+      new maplibregl.NavigationControl({ showZoom: false, showCompass: false }),
+      'bottom-right',
+    )
+    map.on('load', () => {
+      if (disposed) return
+      map.resize()
+      setReady(true)
+    })
+    map.on('error', (e) => {
+      // 瓦片加载失败（网络/瓦片源）时不致命，只在控制台提示
+      console.warn('[globe] map error:', e?.error?.message || e)
+    })
+
+    // 容器尺寸变化（窗口缩放 / 侧栏展开）时让 MapLibre 重算画布
+    const ro = new ResizeObserver(() => map.resize())
+    ro.observe(container)
+
     return () => {
       disposed = true
-      for (const marker of markersRef.current) marker.setMap(null)
+      ro.disconnect()
+      for (const m of markersRef.current) m.remove()
       markersRef.current = []
-      mapRef.current?.destroy()
+      map.remove()
       mapRef.current = null
-      AMapRef.current = null
       setReady(false)
     }
   }, [])
@@ -152,17 +178,16 @@ export default function GlobePage() {
     const isDark =
       mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
     setDark(isDark)
-    map.setMapStyle(amapStyle(configRef.current, isDark))
+    map.setStyle(createMapLibreStyle(isDark))
   }, [mode])
 
   // 标记渲染：按屏幕网格聚合，缩放或平移后重算
   useEffect(() => {
-    const AMap = AMapRef.current
     const map = mapRef.current
-    if (!map || !AMap) return
+    if (!map || !ready) return
 
     const clear = () => {
-      for (const marker of markersRef.current) marker.setMap(null)
+      for (const m of markersRef.current) m.remove()
       markersRef.current = []
     }
 
@@ -190,7 +215,7 @@ export default function GlobePage() {
       el.addEventListener('click', (event) => {
         event.stopPropagation()
         const [lng, lat] = list[0].gcj02
-        map.setZoomAndCenter(Math.min(map.getZoom() + 2, 17), new AMap.LngLat(lng, lat))
+        map.flyTo({ center: [lng, lat], zoom: Math.min(map.getZoom() + 2, 17), duration: 400 })
       })
       return el
     }
@@ -201,7 +226,8 @@ export default function GlobePage() {
       const cells = new Map()
       for (const photo of visiblePhotos) {
         if (!Array.isArray(photo.gcj02)) continue
-        const point = map.lngLatToContainer(new AMap.LngLat(photo.gcj02[0], photo.gcj02[1]))
+        const [lng, lat] = photo.gcj02
+        const point = map.project([lng, lat])
         if (!point) continue
         const key = `${Math.floor(point.x / CELL)}:${Math.floor(point.y / CELL)}`
         const list = cells.get(key)
@@ -211,31 +237,38 @@ export default function GlobePage() {
       for (const list of cells.values()) {
         const single = list.length === 1
         const [lng, lat] = list[0].gcj02
-        const marker = new AMap.Marker({
-          position: new AMap.LngLat(lng, lat),
-          content: single ? singleElement(list[0]) : clusterElement(list),
-          offset: new AMap.Pixel(single ? -20 : -32, single ? -20 : -32),
-          zIndex: single ? 120 : 110,
+        const marker = new maplibregl.Marker({
+          element: single ? singleElement(list[0]) : clusterElement(list),
+          anchor: 'center',
+          offset: [0, 0],
         })
-        marker.setMap(map)
+          .setLngLat([lng, lat])
+          .addTo(map)
         markersRef.current.push(marker)
       }
     }
-
-    const geoData = visiblePhotos.filter((p) => Array.isArray(p.gcj02))
 
     rebuild()
     map.on('moveend', rebuild)
     map.on('zoomend', rebuild)
     map.on('resize', rebuild)
+    map.on('styledata', rebuild)
 
-    if (!fittedRef.current && geoData.length) {
+    if (!fittedRef.current && visiblePhotos.length) {
       fittedRef.current = true
-      try {
-        map.setFitView(null, true, [72, 72, 140, 72], 12)
-      } catch {
-        const [lng, lat] = geoData[0].gcj02
-        map.setZoomAndCenter(5, new AMap.LngLat(lng, lat))
+      const coords = visiblePhotos
+        .filter((p) => Array.isArray(p.gcj02))
+        .map((p) => p.gcj02)
+      if (coords.length) {
+        const bounds = coords.reduce(
+          (b, c) => b.extend(c),
+          new maplibregl.LngLatBounds(coords[0], coords[0]),
+        )
+        try {
+          map.fitBounds(bounds, { padding: 72, maxZoom: 12 })
+        } catch {
+          map.flyTo({ center: coords[0], zoom: 5 })
+        }
       }
     }
 
@@ -243,6 +276,7 @@ export default function GlobePage() {
       map.off('moveend', rebuild)
       map.off('zoomend', rebuild)
       map.off('resize', rebuild)
+      map.off('styledata', rebuild)
       clear()
     }
   }, [visiblePhotos, annotation, ready])
@@ -254,7 +288,10 @@ export default function GlobePage() {
 
   return (
     <div className="fixed inset-0 z-30 bg-neutral-100 dark:bg-neutral-900">
-      <div ref={containerRef} className="absolute inset-0" />
+      {/* MapLibre 会给容器加 .maplibregl-map { position: relative }，它会盖掉 Tailwind 的
+          .absolute（同优先级、后加载）。所以这里用内联样式锁死绝对定位撑满整屏，
+          否则容器高度为 0，canvas 被裁掉，页面看起来一片空白。 */}
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
       {mapError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-100 dark:bg-neutral-900">
           <p className="text-4xl">🗺️</p>

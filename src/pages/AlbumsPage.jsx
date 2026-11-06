@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router'
 import { IconClock } from '@tabler/icons-react'
 import BackPill from '../components/BackPill'
@@ -12,6 +13,8 @@ function sampleColumns(photos, count = 3) {
     columns[index % count].push(photo)
   })
   return columns.map((column) => {
+    // 照片比列数少时会有空列，直接返回空数组，否则 `i % 0` 会得到 NaN 并取到 undefined。
+    if (!column.length) return []
     const result = []
     for (let i = 0; i < 10; i += 1) {
       result.push(column[i % column.length])
@@ -73,8 +76,14 @@ function AlbumCard({ album, photos }) {
 }
 
 export default function AlbumsPage() {
-  const { albums, photos, loading } = useGalleryData()
+  const { albums, photos, loading, loadAll } = useGalleryData()
   const { t } = useLocale()
+
+  // 相册卡片要按 photoIds 找照片，只加载了首页照片时会缺图，所以这里补齐全量。
+  useEffect(() => {
+    loadAll()
+  }, [loadAll])
+
   const columns = sampleColumns(photos, 3)
 
   return (

@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "cloudFunctions": {
+    "directory": "cloud-functions",
+    "nodeVersion": "20"
+  },
+  "mainlandRegions": ["ap-guangzhou"],
+  "overseasRegions": ["ap-singapore"]
+}

@@ -38,7 +38,9 @@ export default function PhotoCard({ photo, index = 0, onOpen }) {
   const shutter = exifShutter(photo)
   const iso = photo?.exif?.ISO
   const location = photo?.city || photo?.country || ''
-  const meta = [formatDate(photo?.dateTaken, 'YYYY-MM-DD'), location].filter(Boolean).join(' · ')
+  const meta = [photo?.dateTaken ? formatDate(photo.dateTaken, 'YYYY-MM-DD') : '', location]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <button

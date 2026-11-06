@@ -22,7 +22,7 @@ export default function SignInPage() {
     setError('')
     try {
       await login(email, password)
-      navigate('/dashboard', { replace: true })
+      navigate('/admin', { replace: true })
     } catch {
       setError(t('login.failed'))
     } finally {
@@ -34,11 +34,14 @@ export default function SignInPage() {
     <div className="relative flex min-h-screen items-center justify-center px-4">
       <BackPill label={t('login.back')} className="!left-4 !top-4" />
       <form onSubmit={submit} className="flex w-full max-w-sm flex-col items-center gap-6 py-10">
-        <img
-          src={getSetting('app:avatarUrl') || '/brand/avatar.webp'}
-          alt=""
-          className="size-24 rounded-full object-cover shadow-sm"
-        />
+        {getSetting('app:avatarUrl') && (
+          <img
+            src={getSetting('app:avatarUrl')}
+            alt=""
+            className="size-24 rounded-full object-cover shadow-sm"
+            referrerPolicy="no-referrer"
+          />
+        )}
         <div className="flex flex-col items-center gap-1">
           <h1 className="text-2xl font-medium text-neutral-900 dark:text-neutral-100">
             {t('signIn')}

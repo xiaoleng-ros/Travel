@@ -1,6 +1,7 @@
 import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
-import localizedFormat from 'dayjs/plugin/localizedFormat'
+// 带 .js 后缀：Node 原生 ESM（node --test）不做扩展名推断，Vite 两种写法都认。
+import relativeTime from 'dayjs/plugin/relativeTime.js'
+import localizedFormat from 'dayjs/plugin/localizedFormat.js'
 
 dayjs.extend(relativeTime)
 dayjs.extend(localizedFormat)
@@ -65,7 +66,7 @@ export function formatCoordinate(lat, lng) {
     const degrees = Math.floor(abs)
     const minutesFloat = (abs - degrees) * 60
     const minutes = Math.floor(minutesFloat)
-    const seconds = ((minutesFloat - minutes) * 60).toFixed(2)
+    const seconds = ((minutesFloat - minutes) * 60).toFixed(2).padStart(5, '0')
     return `${degrees}°${String(minutes).padStart(2, '0')}'${seconds}"${dir}`
   }
   return `${format(lat, 'N', 'S')} ${format(lng, 'E', 'W')}`
@@ -192,5 +193,9 @@ export function photoAspect(photo) {
 }
 
 export function downloadName(photo) {
-  return basename(photo?.storageKey) || `${photo?.id || 'photo'}.jpg`
+  // 优先用上传时的原始文件名（中文、空格都保留），没有才退回存储 key
+  if (photo?.originalName) return photo.originalName
+  const fallback = basename(photo?.storageKey)
+  if (fallback && fallback !== '—') return fallback
+  return `${photo?.id || 'photo'}.jpg`
 }

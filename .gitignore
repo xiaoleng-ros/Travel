@@ -6,3 +6,5 @@ data/db.json
 *.log
 *.zip
 .DS_Store
+.tmp-esbuild
+.tmp-*

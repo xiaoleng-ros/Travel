@@ -34,7 +34,9 @@ export default function TopBar({ photos = [], total = 0, activePhoto = null, scr
 
   const title = getSetting('app:title') || (loading ? '' : 'Memora')
   const author = getSetting('app:author')
-  const avatar = getSetting('app:avatarUrl') || '/brand/avatar.webp'
+  // 账号有头像就显示账号头像；站点品牌图只作为访客身份标记。
+  // 两者都没有就不渲染图片，不留任何默认占位图。
+  const avatar = user ? user.avatar : getSetting('app:avatarUrl')
   const slogan = getSetting('app:slogan')
   const ThemeIcon = mode === 'dark' ? IconMoon : mode === 'light' ? IconSun : IconDeviceDesktop
   const close = () => setOpenMenu(null)
@@ -45,18 +47,22 @@ export default function TopBar({ photos = [], total = 0, activePhoto = null, scr
         <div className="masonry-topbar__inner">
           <div className="masonry-topbar__identity">
             <Link
-              to={user ? '/dashboard' : '/signin'}
+              to={user ? '/admin' : '/signin'}
               className="relative block shrink-0"
               aria-label={user ? t('dashboard') : t('signIn')}
             >
-              <img
-                src={avatar}
-                alt={t('signIn')}
-                className="masonry-topbar__avatar"
-                onError={(event) => {
-                  event.currentTarget.src = '/brand/avatar.webp'
-                }}
-              />
+              {avatar ? (
+                <img
+                  src={avatar}
+                  alt=""
+                  className="masonry-topbar__avatar"
+                  // 七牛 CDN 开了 Referer 防盗链，只放行线上域名，本地会 403。
+                  // 不带 Referer 的请求是放行的，所以这里固定不发 Referer。
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="masonry-topbar__avatar masonry-topbar__avatar--empty" aria-hidden="true" />
+              )}
               {user && (
                 <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[10px] text-white shadow">
                   ★

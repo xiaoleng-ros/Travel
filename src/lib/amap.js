@@ -29,6 +29,11 @@ export function loadAmap(plugins = []) {
     loadPromise = getMapConfig()
       .then((config) => {
         if (!config?.key) throw new Error('未配置高德地图 Key')
+        // 2021-12-02 之后申请的 Key 必须带安全密钥，且必须在脚本加载前挂到全局。
+        // 没有配置 securityCode 时就不设，兼容老 Key（老 Key 不需要这个）。
+        if (config.securityCode) {
+          window._AMapSecurityConfig = { securityJsCode: config.securityCode }
+        }
         const src =
           'https://webapi.amap.com/maps?v=2.0&key=' +
           encodeURIComponent(config.key) +

@@ -9,11 +9,14 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "node --env-file-if-exists=.env server/index.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test \"tests/*.test.js\"",
+    "migrate": "node --env-file-if-exists=.env scripts/migrate-to-turso.mjs"
   },
   "dependencies": {
     "@fontsource/pacifico": "^5.2.5",
     "@fontsource/rubik": "^5.2.5",
+    "@libsql/client": "^0.18.0",
     "@tabler/icons-react": "^3.34.0",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
@@ -26,6 +29,7 @@
     "maplibre-gl": "^5.9.0",
     "motion": "^12.40.0",
     "multer": "^2.5.0",
+    "qiniu": "^7.15.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "^8.3.0",

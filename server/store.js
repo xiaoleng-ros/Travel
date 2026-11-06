@@ -2,84 +2,91 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import bcrypt from 'bcryptjs'
+import {
+  EMPTY_DB,
+  bindDb,
+  flushDb,
+  getDriver,
+  getLastError,
+  initDb,
+  loadDb,
+  scheduleSave,
+} from './db.js'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
-const DATA_DIR = path.join(ROOT, 'data')
-const DB_FILE = path.join(DATA_DIR, 'db.json')
-const SEED_DIR = path.join(DATA_DIR, 'seed')
+const SEED_DIR = path.join(ROOT, 'data', 'seed')
 
 export const UPLOAD_DIR = path.join(ROOT, 'public', 'uploads')
 export const UPLOAD_THUMB_DIR = path.join(UPLOAD_DIR, 'thumbs')
 export const SEED_THUMB_DIR = path.join(ROOT, 'public', 'seed-thumbs')
 
-fs.mkdirSync(UPLOAD_THUMB_DIR, { recursive: true })
-fs.mkdirSync(SEED_THUMB_DIR, { recursive: true })
-
-const EMPTY_DB = {
-  users: [],
-  photos: [],
-  albums: [],
-  albumPhotos: [],
-  settings: {},
-  reactions: [],
-  trash: [],
-  createdAt: new Date().toISOString(),
-}
-
 let cache = null
-let writeTimer = null
 
-// 用环境变量覆盖已有数据库中的管理员账号（ADMIN_EMAIL / ADMIN_PASSWORD）
+// 仅在首次播种（库内还没有管理员）时，用环境变量 ADMIN_EMAIL / ADMIN_PASSWORD
+// 初始化默认管理员账号。正常启动时不再覆盖，否则你在后台「账户」页改过的邮箱、
+// 密码会在每次重启后被环境变量里的旧值冲掉。
 // 返回 true 表示发生了变更
 function applyAdminEnv(db) {
   const email = process.env.ADMIN_EMAIL?.trim()
   const password = process.env.ADMIN_PASSWORD
   if (!email && !password) return false
   const admin = db.users.find((u) => u.isAdmin) || db.users[0]
-  if (!admin) return false
-  let changed = false
-  if (email && email !== admin.email) {
-    admin.email = email
-    console.log(`[admin] email overridden by env: ${email}`)
-    changed = true
+  // 已有管理员：尊重后台改过的值，不再用环境变量覆盖
+  if (admin) return false
+  // 没有管理员：用环境变量的初始值建一个
+  const initEmail = email || 'admin@memora.local'
+  const initPassword = password || 'Memora@2026'
+  db.users.push({
+    id: 1,
+    email: initEmail,
+    username: process.env.ADMIN_USERNAME?.trim() || 'admin',
+    passwordHash: bcrypt.hashSync(initPassword, 10),
+    avatar: '',
+    isAdmin: true,
+    createdAt: new Date().toISOString(),
+    passwordChangedAt: null,
+  })
+  console.log(`[admin] seeded from env: ${initEmail}`)
+  return true
+}
+
+// ---------------------------------------------------------------------------
+// 启动：连接持久层 → 全量载入内存 → 空库则播种
+// ---------------------------------------------------------------------------
+export async function initStore() {
+  const driver = await initDb()
+  let db = await loadDb()
+
+  if (!db.users.length) {
+    db = seedDatabase(db)
+    await flushDb(db)
   }
-  if (password) {
-    admin.passwordHash = bcrypt.hashSync(password, 10)
-    admin.passwordChangedAt = null
-    console.log('[admin] password overridden by env: ADMIN_PASSWORD')
-    changed = true
-  }
-  return changed
+  if (applyAdminEnv(db)) await flushDb(db)
+
+  cache = db
+  bindDb(db)
+  console.log(`[store] driver=${driver} photos=${db.photos.length} albums=${db.albums.length}`)
+  return db
 }
 
 export function getDb() {
-  if (cache) return cache
-  if (fs.existsSync(DB_FILE)) {
-    cache = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))
-    if (applyAdminEnv(cache)) saveDb(true)
-    return cache
-  }
-  cache = seedDatabase()
-  saveDb(true)
+  if (!cache) throw new Error('数据层尚未初始化，请先 await initStore()')
   return cache
 }
 
-export function saveDb(immediate = false) {
-  if (!cache) return
-  if (immediate) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
-    fs.writeFileSync(DB_FILE, JSON.stringify(cache, null, 2))
-    return
-  }
-  clearTimeout(writeTimer)
-  writeTimer = setTimeout(() => {
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(cache, null, 2))
-    } catch (err) {
-      console.error('[db] write failed:', err.message)
-    }
-  }, 80)
+export function isReady() {
+  return Boolean(cache)
 }
+
+export function saveDb(immediate = false) {
+  scheduleSave(immediate)
+}
+
+export async function flushNow() {
+  await flushDb(cache)
+}
+
+export { getDriver, getLastError }
 
 function readSeed(name, fallback) {
   try {
@@ -93,8 +100,8 @@ function safeId(id) {
   return String(id).replace(/[^\w.-]+/g, '_')
 }
 
-function seedDatabase() {
-  const db = structuredClone(EMPTY_DB)
+function seedDatabase(base) {
+  const db = base || structuredClone(EMPTY_DB)
   const seedPhotos = readSeed('photos.json', [])
   const seedAlbums = readSeed('albums.json', [])
   const seedSettings = readSeed('settings.json', null)
@@ -130,13 +137,10 @@ function seedDatabase() {
     photoIds: album.photoIds || [],
   }))
 
+  db.albumPhotos = []
   for (const album of seedAlbums) {
     ;(album.photoIds || []).forEach((photoId, index) => {
-      db.albumPhotos.push({
-        albumId: album.id,
-        photoId,
-        position: index,
-      })
+      db.albumPhotos.push({ albumId: album.id, photoId, position: index })
     })
   }
 
@@ -144,7 +148,7 @@ function seedDatabase() {
     db.settings = structuredClone(seedSettings.data)
   }
   db.settings.app = { ...(db.settings.app || {}) }
-  db.settings.app.avatarUrl = '/brand/avatar.webp'
+  db.settings.app.avatarUrl = ''
   db.settings.app.socialLinks = db.settings.app.socialLinks || '[]'
   db.settings.app['appearance.homeHeaderLayout'] = 'topbar'
 
@@ -156,7 +160,7 @@ function seedDatabase() {
       email: adminEmail,
       username: process.env.ADMIN_USERNAME || 'LiuShen',
       passwordHash: bcrypt.hashSync(adminPassword, 10),
-      avatar: '/brand/avatar.webp',
+      avatar: '',
       isAdmin: true,
       createdAt: new Date().toISOString(),
       passwordChangedAt: null,

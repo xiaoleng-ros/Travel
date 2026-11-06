@@ -12,6 +12,7 @@ import { LocaleProvider } from './context/LocaleContext'
 import { SettingsProvider } from './context/SettingsContext'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
+import { ConfirmProvider } from './context/ConfirmContext'
 import { GalleryProvider } from './context/GalleryContext'
 import { GalleryDataProvider } from './context/GalleryDataContext'
 
@@ -22,11 +23,13 @@ createRoot(document.getElementById('root')).render(
         <SettingsProvider>
           <AuthProvider>
             <ToastProvider>
-              <GalleryProvider>
-                <GalleryDataProvider>
-                  <App />
-                </GalleryDataProvider>
-              </GalleryProvider>
+              <ConfirmProvider>
+                <GalleryProvider>
+                  <GalleryDataProvider>
+                    <App />
+                  </GalleryDataProvider>
+                </GalleryProvider>
+              </ConfirmProvider>
             </ToastProvider>
           </AuthProvider>
         </SettingsProvider>

@@ -10,16 +10,13 @@ import { useGallery, applyFilters, sortPhotos } from '../context/GalleryContext'
 import { useSettings } from '../context/SettingsContext'
 import { useLocale } from '../context/LocaleContext'
 
-const BATCH_SIZE = 33
-
 export default function HomePage() {
   const { photoId: viewerId } = useParams()
   const navigate = useNavigate()
-  const { photos, albums, loading, error } = useGalleryData()
+  const { photos, albums, total, hasMore, loading, error, loadMore, loadAll } = useGalleryData()
   const { filters, search, sort, hasActiveFilters } = useGallery()
   const { getSetting } = useSettings()
   const { t } = useLocale()
-  const [limit, setLimit] = useState(BATCH_SIZE)
   const [scrolled, setScrolled] = useState(false)
   const [activePhoto, setActivePhoto] = useState(null)
   const ticking = useRef(false)
@@ -29,13 +26,13 @@ export default function HomePage() {
     return sortPhotos(result, sort)
   }, [photos, filters, search, sort])
 
-  const visible = filtered.slice(0, limit)
-  const hasMore = limit < filtered.length
+  // 服务端分页：已加载的照片就是「可见」的照片，多出来的由「加载更多」继续取。
+  const visible = filtered
 
-  const filterKey = JSON.stringify(filters)
+  // 筛选/搜索是在前端做的，只看已加载的那一页会漏结果，所以一开筛选就补齐全量。
   useEffect(() => {
-    setLimit(BATCH_SIZE)
-  }, [sort, filterKey, search])
+    if (hasActiveFilters) loadAll()
+  }, [hasActiveFilters, loadAll])
 
   const photoMap = useMemo(() => {
     const map = new Map()
@@ -90,7 +87,7 @@ export default function HomePage() {
     <div className="relative min-h-screen">
       <TopBar
         photos={photos}
-        total={photos.length}
+        total={total || photos.length}
         activePhoto={activePhoto}
         scrolled={scrolled}
       />
@@ -98,11 +95,14 @@ export default function HomePage() {
       <div className="px-1 pb-10 pt-[45px] md:pt-[54px]">
         {loading ? (
           <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4">
-            <img
-              src={getSetting('app:avatarUrl') || '/brand/avatar.webp'}
-              alt=""
-              className="size-14 animate-pulse rounded-full object-cover"
-            />
+            {getSetting('app:avatarUrl') && (
+              <img
+                src={getSetting('app:avatarUrl')}
+                alt=""
+                className="size-14 animate-pulse rounded-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            )}
             <span className="animate-pulse text-sm font-medium text-neutral-500">
               {t('loading')}
             </span>
@@ -122,7 +122,7 @@ export default function HomePage() {
               <div className="flex justify-center pt-6">
                 <button
                   type="button"
-                  onClick={() => setLimit((value) => value + BATCH_SIZE)}
+                  onClick={loadMore}
                   className="inline-flex h-8 items-center gap-1 rounded-md bg-neutral-100 px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
                 >
                   {t('moreMoments')}
