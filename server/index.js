@@ -80,6 +80,10 @@ app.use((_req, res, next) => {
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://webapi.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'self';",
   )
+  // HSTS：生产环境强制浏览器只用 HTTPS 访问，防止降级到 HTTP 泄漏凭据
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+  }
   next()
 })
 
