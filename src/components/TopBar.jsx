@@ -1,17 +1,15 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Link } from 'react-router'
-import {
-  IconAdjustmentsHorizontal,
-  IconDeviceDesktop,
-  IconDotsVertical,
-  IconFilter,
-  IconLanguage,
-  IconLogin,
-  IconMapPin2,
-  IconMoon,
-  IconPhoto,
-  IconSun,
-} from '@tabler/icons-react'
+import IconAdjustmentsHorizontal from '@tabler/icons-react/dist/esm/icons/IconAdjustmentsHorizontal.mjs'
+import IconDeviceDesktop from '@tabler/icons-react/dist/esm/icons/IconDeviceDesktop.mjs'
+import IconDotsVertical from '@tabler/icons-react/dist/esm/icons/IconDotsVertical.mjs'
+import IconFilter from '@tabler/icons-react/dist/esm/icons/IconFilter.mjs'
+import IconLanguage from '@tabler/icons-react/dist/esm/icons/IconLanguage.mjs'
+import IconLogin from '@tabler/icons-react/dist/esm/icons/IconLogin.mjs'
+import IconMapPin2 from '@tabler/icons-react/dist/esm/icons/IconMapPin2.mjs'
+import IconMoon from '@tabler/icons-react/dist/esm/icons/IconMoon.mjs'
+import IconPhoto from '@tabler/icons-react/dist/esm/icons/IconPhoto.mjs'
+import IconSun from '@tabler/icons-react/dist/esm/icons/IconSun.mjs'
 import { useSettings } from '../context/SettingsContext'
 import { useLocale } from '../context/LocaleContext'
 import { useTheme } from '../context/ThemeContext'

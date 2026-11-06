@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react'
-import {
-  IconPlus,
-  IconPencil,
-  IconTrash,
-  IconX,
-  IconLoader2,
-  IconStarFilled,
-} from '@tabler/icons-react'
+﻿import { useEffect, useState } from 'react'
+import IconPlus from '@tabler/icons-react/dist/esm/icons/IconPlus.mjs'
+import IconPencil from '@tabler/icons-react/dist/esm/icons/IconPencil.mjs'
+import IconTrash from '@tabler/icons-react/dist/esm/icons/IconTrash.mjs'
+import IconX from '@tabler/icons-react/dist/esm/icons/IconX.mjs'
+import IconLoader2 from '@tabler/icons-react/dist/esm/icons/IconLoader2.mjs'
+import IconStarFilled from '@tabler/icons-react/dist/esm/icons/IconStarFilled.mjs'
 import { api } from '../lib/api'
 import { useToast } from '../context/ToastContext'
 import { useConfirm } from '../context/ConfirmContext'

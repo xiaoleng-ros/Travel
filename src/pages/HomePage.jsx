@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { IconChevronDown } from '@tabler/icons-react'
+import IconChevronDown from '@tabler/icons-react/dist/esm/icons/IconChevronDown.mjs'
 import TopBar from '../components/TopBar'
 import PhotoWall from '../components/PhotoWall'
 import FooterBadge from '../components/FooterBadge'

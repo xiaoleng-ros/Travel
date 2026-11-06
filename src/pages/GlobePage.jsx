@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  IconAdjustmentsHorizontal,
-  IconClock,
-  IconPlayerPauseFilled,
-  IconPlayerPlayFilled,
-  IconPlus,
-  IconMinus,
-  IconX,
-} from '@tabler/icons-react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import IconAdjustmentsHorizontal from '@tabler/icons-react/dist/esm/icons/IconAdjustmentsHorizontal.mjs'
+import IconClock from '@tabler/icons-react/dist/esm/icons/IconClock.mjs'
+import IconPlayerPauseFilled from '@tabler/icons-react/dist/esm/icons/IconPlayerPauseFilled.mjs'
+import IconPlayerPlayFilled from '@tabler/icons-react/dist/esm/icons/IconPlayerPlayFilled.mjs'
+import IconPlus from '@tabler/icons-react/dist/esm/icons/IconPlus.mjs'
+import IconMinus from '@tabler/icons-react/dist/esm/icons/IconMinus.mjs'
+import IconX from '@tabler/icons-react/dist/esm/icons/IconX.mjs'
 import BackPill from '../components/BackPill'
 import PhotoViewer from '../components/PhotoViewer'
 import { useGalleryData } from '../context/GalleryDataContext'

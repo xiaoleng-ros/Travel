@@ -1,16 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  IconCloudUpload,
-  IconPencil,
-  IconTrash,
-  IconEyeOff,
-  IconSearch,
-  IconX,
-  IconStarFilled,
-  IconStar,
-  IconLoader2,
-  IconMapPin,
-} from '@tabler/icons-react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import IconCloudUpload from '@tabler/icons-react/dist/esm/icons/IconCloudUpload.mjs'
+import IconPencil from '@tabler/icons-react/dist/esm/icons/IconPencil.mjs'
+import IconTrash from '@tabler/icons-react/dist/esm/icons/IconTrash.mjs'
+import IconEyeOff from '@tabler/icons-react/dist/esm/icons/IconEyeOff.mjs'
+import IconSearch from '@tabler/icons-react/dist/esm/icons/IconSearch.mjs'
+import IconX from '@tabler/icons-react/dist/esm/icons/IconX.mjs'
+import IconStarFilled from '@tabler/icons-react/dist/esm/icons/IconStarFilled.mjs'
+import IconStar from '@tabler/icons-react/dist/esm/icons/IconStar.mjs'
+import IconLoader2 from '@tabler/icons-react/dist/esm/icons/IconLoader2.mjs'
+import IconMapPin from '@tabler/icons-react/dist/esm/icons/IconMapPin.mjs'
 import { api, uploadPhotos } from '../lib/api'
 import { useToast } from '../context/ToastContext'
 import { useConfirm } from '../context/ConfirmContext'

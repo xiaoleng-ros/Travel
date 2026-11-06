@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+﻿import { useEffect } from 'react'
 import { Link } from 'react-router'
-import { IconClock } from '@tabler/icons-react'
+import IconClock from '@tabler/icons-react/dist/esm/icons/IconClock.mjs'
 import BackPill from '../components/BackPill'
 import { useGalleryData } from '../context/GalleryDataContext'
 import { useLocale } from '../context/LocaleContext'

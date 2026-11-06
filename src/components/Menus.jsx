@@ -1,20 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
-import {
-  IconAdjustmentsHorizontal,
-  IconBuildingSkyscraper,
-  IconCamera,
-  IconDeviceDesktop,
-  IconDice3,
-  IconFilter,
-  IconFocusCentered,
-  IconLanguage,
-  IconMoon,
-  IconSearch,
-  IconStar,
-  IconSun,
-  IconTag,
-  IconCheck,
-} from '@tabler/icons-react'
+﻿import { useEffect, useRef, useState } from 'react'
+import IconAdjustmentsHorizontal from '@tabler/icons-react/dist/esm/icons/IconAdjustmentsHorizontal.mjs'
+import IconBuildingSkyscraper from '@tabler/icons-react/dist/esm/icons/IconBuildingSkyscraper.mjs'
+import IconCamera from '@tabler/icons-react/dist/esm/icons/IconCamera.mjs'
+import IconDeviceDesktop from '@tabler/icons-react/dist/esm/icons/IconDeviceDesktop.mjs'
+import IconDice3 from '@tabler/icons-react/dist/esm/icons/IconDice3.mjs'
+import IconFilter from '@tabler/icons-react/dist/esm/icons/IconFilter.mjs'
+import IconFocusCentered from '@tabler/icons-react/dist/esm/icons/IconFocusCentered.mjs'
+import IconLanguage from '@tabler/icons-react/dist/esm/icons/IconLanguage.mjs'
+import IconMoon from '@tabler/icons-react/dist/esm/icons/IconMoon.mjs'
+import IconSearch from '@tabler/icons-react/dist/esm/icons/IconSearch.mjs'
+import IconStar from '@tabler/icons-react/dist/esm/icons/IconStar.mjs'
+import IconSun from '@tabler/icons-react/dist/esm/icons/IconSun.mjs'
+import IconTag from '@tabler/icons-react/dist/esm/icons/IconTag.mjs'
+import IconCheck from '@tabler/icons-react/dist/esm/icons/IconCheck.mjs'
 import { useLocale } from '../context/LocaleContext'
 import { useTheme } from '../context/ThemeContext'
 import { useGallery } from '../context/GalleryContext'

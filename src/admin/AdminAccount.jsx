@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import {
-  IconCamera,
-  IconLoader2,
-  IconLock,
-  IconTrash,
-  IconUpload,
-  IconUser,
-} from '@tabler/icons-react'
+﻿import { useEffect, useRef, useState } from 'react'
+import IconCamera from '@tabler/icons-react/dist/esm/icons/IconCamera.mjs'
+import IconLoader2 from '@tabler/icons-react/dist/esm/icons/IconLoader2.mjs'
+import IconLock from '@tabler/icons-react/dist/esm/icons/IconLock.mjs'
+import IconTrash from '@tabler/icons-react/dist/esm/icons/IconTrash.mjs'
+import IconUpload from '@tabler/icons-react/dist/esm/icons/IconUpload.mjs'
+import IconUser from '@tabler/icons-react/dist/esm/icons/IconUser.mjs'
 import { api, removeAvatar, uploadAvatar } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'

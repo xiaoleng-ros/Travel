@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react'
-import {
-  IconAdjustments,
-  IconAppWindow,
-  IconChartBar,
-  IconLoader2,
-  IconMap2,
-  IconShieldLock,
-} from '@tabler/icons-react'
+﻿import { useEffect, useState } from 'react'
+import IconAdjustments from '@tabler/icons-react/dist/esm/icons/IconAdjustments.mjs'
+import IconAppWindow from '@tabler/icons-react/dist/esm/icons/IconAppWindow.mjs'
+import IconChartBar from '@tabler/icons-react/dist/esm/icons/IconChartBar.mjs'
+import IconLoader2 from '@tabler/icons-react/dist/esm/icons/IconLoader2.mjs'
+import IconMap2 from '@tabler/icons-react/dist/esm/icons/IconMap2.mjs'
+import IconShieldLock from '@tabler/icons-react/dist/esm/icons/IconShieldLock.mjs'
 import { api } from '../lib/api'
 import { useToast } from '../context/ToastContext'
 import { useSettings } from '../context/SettingsContext'

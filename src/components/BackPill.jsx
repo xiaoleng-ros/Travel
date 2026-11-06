@@ -1,5 +1,5 @@
-import { Link } from 'react-router'
-import { IconArrowLeft } from '@tabler/icons-react'
+﻿import { Link } from 'react-router'
+import IconArrowLeft from '@tabler/icons-react/dist/esm/icons/IconArrowLeft.mjs'
 
 export default function BackPill({ to = '/', label, className = '' }) {
   return (

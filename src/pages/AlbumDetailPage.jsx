@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
-import { IconClock } from '@tabler/icons-react'
+import IconClock from '@tabler/icons-react/dist/esm/icons/IconClock.mjs'
 import BackPill from '../components/BackPill'
 import PhotoWall from '../components/PhotoWall'
 import PhotoViewer from '../components/PhotoViewer'

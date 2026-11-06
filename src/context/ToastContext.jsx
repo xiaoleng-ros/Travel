@@ -1,5 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { IconCircleCheck, IconAlertTriangle, IconInfoCircle, IconX } from '@tabler/icons-react'
+﻿import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import IconCircleCheck from '@tabler/icons-react/dist/esm/icons/IconCircleCheck.mjs'
+import IconAlertTriangle from '@tabler/icons-react/dist/esm/icons/IconAlertTriangle.mjs'
+import IconInfoCircle from '@tabler/icons-react/dist/esm/icons/IconInfoCircle.mjs'
+import IconX from '@tabler/icons-react/dist/esm/icons/IconX.mjs'
 
 const ToastContext = createContext(null)
 

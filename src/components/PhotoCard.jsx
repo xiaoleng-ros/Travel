@@ -1,11 +1,9 @@
-import { useState } from 'react'
-import {
-  IconCamera,
-  IconFocusCentered,
-  IconAperture,
-  IconClock,
-  IconSun,
-} from '@tabler/icons-react'
+﻿import { useState } from 'react'
+import IconCamera from '@tabler/icons-react/dist/esm/icons/IconCamera.mjs'
+import IconFocusCentered from '@tabler/icons-react/dist/esm/icons/IconFocusCentered.mjs'
+import IconAperture from '@tabler/icons-react/dist/esm/icons/IconAperture.mjs'
+import IconClock from '@tabler/icons-react/dist/esm/icons/IconClock.mjs'
+import IconSun from '@tabler/icons-react/dist/esm/icons/IconSun.mjs'
 import ThumbHash from './ThumbHash'
 import { formatDate, photoAspect, originalFor, thumbnailFor } from '../lib/format'
 

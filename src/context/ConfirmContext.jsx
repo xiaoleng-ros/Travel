@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { IconAlertTriangle, IconHelpCircle } from '@tabler/icons-react'
+﻿import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import IconAlertTriangle from '@tabler/icons-react/dist/esm/icons/IconAlertTriangle.mjs'
+import IconHelpCircle from '@tabler/icons-react/dist/esm/icons/IconHelpCircle.mjs'
 import { useLocale } from './LocaleContext'
 
 const ConfirmContext = createContext(null)

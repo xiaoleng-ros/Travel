@@ -1,16 +1,14 @@
-import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router'
-import {
-  IconChartBar,
-  IconPhoto,
-  IconFolders,
-  IconTrash,
-  IconSettings,
-  IconUser,
-  IconExternalLink,
-  IconLogout,
-  IconMenu2,
-  IconX,
-} from '@tabler/icons-react'
+﻿import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router'
+import IconChartBar from '@tabler/icons-react/dist/esm/icons/IconChartBar.mjs'
+import IconPhoto from '@tabler/icons-react/dist/esm/icons/IconPhoto.mjs'
+import IconFolders from '@tabler/icons-react/dist/esm/icons/IconFolders.mjs'
+import IconTrash from '@tabler/icons-react/dist/esm/icons/IconTrash.mjs'
+import IconSettings from '@tabler/icons-react/dist/esm/icons/IconSettings.mjs'
+import IconUser from '@tabler/icons-react/dist/esm/icons/IconUser.mjs'
+import IconExternalLink from '@tabler/icons-react/dist/esm/icons/IconExternalLink.mjs'
+import IconLogout from '@tabler/icons-react/dist/esm/icons/IconLogout.mjs'
+import IconMenu2 from '@tabler/icons-react/dist/esm/icons/IconMenu2.mjs'
+import IconX from '@tabler/icons-react/dist/esm/icons/IconX.mjs'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'

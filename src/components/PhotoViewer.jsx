@@ -1,31 +1,29 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import {
-  IconAperture,
-  IconChartBar,
-  IconChevronLeft,
-  IconChevronRight,
-  IconClock,
-  IconFileDescription,
-  IconFocusCentered,
-  IconInfoCircle,
-  IconMapPin,
-  IconPhoto,
-  IconRuler2,
-  IconShare3,
-  IconStar,
-  IconSun,
-  IconTag,
-  IconX,
-  IconCamera,
-  IconPalette,
-  IconAlbum,
-  IconBolt,
-  IconAdjustments,
-  IconBulb,
-  IconGridDots,
-  IconRoute,
-} from '@tabler/icons-react'
+import IconAperture from '@tabler/icons-react/dist/esm/icons/IconAperture.mjs'
+import IconChartBar from '@tabler/icons-react/dist/esm/icons/IconChartBar.mjs'
+import IconChevronLeft from '@tabler/icons-react/dist/esm/icons/IconChevronLeft.mjs'
+import IconChevronRight from '@tabler/icons-react/dist/esm/icons/IconChevronRight.mjs'
+import IconClock from '@tabler/icons-react/dist/esm/icons/IconClock.mjs'
+import IconFileDescription from '@tabler/icons-react/dist/esm/icons/IconFileDescription.mjs'
+import IconFocusCentered from '@tabler/icons-react/dist/esm/icons/IconFocusCentered.mjs'
+import IconInfoCircle from '@tabler/icons-react/dist/esm/icons/IconInfoCircle.mjs'
+import IconMapPin from '@tabler/icons-react/dist/esm/icons/IconMapPin.mjs'
+import IconPhoto from '@tabler/icons-react/dist/esm/icons/IconPhoto.mjs'
+import IconRuler2 from '@tabler/icons-react/dist/esm/icons/IconRuler2.mjs'
+import IconShare3 from '@tabler/icons-react/dist/esm/icons/IconShare3.mjs'
+import IconStar from '@tabler/icons-react/dist/esm/icons/IconStar.mjs'
+import IconSun from '@tabler/icons-react/dist/esm/icons/IconSun.mjs'
+import IconTag from '@tabler/icons-react/dist/esm/icons/IconTag.mjs'
+import IconX from '@tabler/icons-react/dist/esm/icons/IconX.mjs'
+import IconCamera from '@tabler/icons-react/dist/esm/icons/IconCamera.mjs'
+import IconPalette from '@tabler/icons-react/dist/esm/icons/IconPalette.mjs'
+import IconAlbum from '@tabler/icons-react/dist/esm/icons/IconAlbum.mjs'
+import IconBolt from '@tabler/icons-react/dist/esm/icons/IconBolt.mjs'
+import IconAdjustments from '@tabler/icons-react/dist/esm/icons/IconAdjustments.mjs'
+import IconBulb from '@tabler/icons-react/dist/esm/icons/IconBulb.mjs'
+import IconGridDots from '@tabler/icons-react/dist/esm/icons/IconGridDots.mjs'
+import IconRoute from '@tabler/icons-react/dist/esm/icons/IconRoute.mjs'
 import { api } from '../lib/api'
 import { useLocale } from '../context/LocaleContext'
 import { useTheme } from '../context/ThemeContext'
