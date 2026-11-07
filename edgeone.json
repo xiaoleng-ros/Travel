@@ -3,8 +3,25 @@
   "outputDirectory": "dist",
   "cloudFunctions": {
     "directory": "cloud-functions",
-    "nodeVersion": "20"
+    "nodeVersion": "20",
+    "nodejs": {
+      "externalNodeModules": [
+        "@libsql/client",
+        "@libsql/linux-x64-gnu"
+      ],
+      "includeFiles": [
+        "public/seed-thumbs/**",
+        "public/brand/**"
+      ],
+      "maxDuration": 60
+    }
   },
   "mainlandRegions": ["ap-guangzhou"],
-  "overseasRegions": ["ap-singapore"]
+  "overseasRegions": ["ap-singapore"],
+  "rewrites": [
+    {
+      "source": "/*",
+      "destination": "/index.html"
+    }
+  ]
 }

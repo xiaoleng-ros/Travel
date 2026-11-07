@@ -1516,10 +1516,27 @@ app.use((err, _req, res, _next) => {
 // ---------------------------------------------------------------------------
 export default app
 
-const isMain =
-  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+// ---------------------------------------------------------------------------
+// 启动
+//
+// 同一份 app 有两种跑法：
+//   1. 本地 / 自托管：node server/index.js，自己 listen 端口
+//   2. EdgeOne Cloud Functions：import 这个模块，平台负责监听，
+//      **不能 listen**。
+//
+// 之前用 process.argv[1] 判断是否为主模块，但 EdgeOne 打包后 argv[1]
+// 指向打包后的 /var/user/index.mjs，不等于源文件路径，导致 isMain 失效、
+// 函数里也尝试 listen 端口，报 EADDRINUSE。
+// 改成：只要环境变量 EDGEONE_FUNCTIONS 为真（或 NODE_ENV=production 且
+// 没有 PORT 显式指定），就不 listen。最稳妥的做法是本地启动脚本通过
+// MEMORA_LISTEN=1 显式声明要 listen。
+// ---------------------------------------------------------------------------
+const shouldListen =
+  process.env.MEMORA_LISTEN === '1' ||
+  process.argv[1]?.endsWith('server/index.js') ||
+  process.argv[1]?.endsWith('server\\index.js')
 
-if (isMain) {
+if (shouldListen) {
   ready()
     .then(() => {
       app.listen(PORT, () => {
