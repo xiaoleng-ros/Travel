@@ -1,9 +1,11 @@
 // ---------------------------------------------------------------------------
-// EdgeOne Cloud Functions 入口（全站兜底路由）
+// EdgeOne Cloud Functions 入口（只处理 /api/* 路由）
 //
 // 部署形态：
 //   - 静态资源（dist、public/seed-thumbs 等）由 EdgeOne Pages 的 CDN 直接返回
-//   - 其余请求（含 /api/*）落到这个函数，交给 Express 处理
+//   - SPA 前端路由（/admin、/photos/xxx 等）由 edgeone.json 的 rewrites
+//     回退到 /index.html，由前端接管
+//   - /api/* 请求落到这个函数，交给 Express 处理
 //
 // 关键约束（来自 EdgeOne 文档）：
 //   - 只导出 app 实例，**不要 listen 端口**
@@ -12,6 +14,6 @@
 //
 // 本地开发不受影响：直接跑 node server/index.js 即可。
 // ---------------------------------------------------------------------------
-import app from '../server/index.js'
+import app from '../../server/index.js'
 
 export default app

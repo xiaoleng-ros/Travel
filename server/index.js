@@ -1468,22 +1468,22 @@ const sendSpaShell = (req, res) => {
   }
 }
 
+// SPA catch-all：非 /api 的 GET 请求都返回 index.html，让前端路由接管。
+// 在 EdgeOne Cloud Functions 里，这个函数只处理 /api/*，静态资源和 SPA
+// 路由由 EdgeOne CDN + rewrites 处理，dist 目录不在函数包里。所以这里只
+// 在 dist 存在时（本地开发）注册 SPA shell，不存在时直接走后面的 404。
 if (fs.existsSync(distDir)) {
   console.log(`[spa] serving dist from ${distDir}`)
   // /index.html 直接走注入路由，否则 express.static 会吐出未注入的原始文件。
   app.get('/index.html', sendSpaShell)
   app.use(express.static(distDir, { index: false }))
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next()
+    sendSpaShell(req, res)
+  })
 } else {
   console.error(`[spa] dist dir not found, tried: ${distCandidates.join(', ')}`)
 }
-
-// SPA catch-all：非 /api 的 GET 请求都返回 index.html，让前端路由接管。
-// 不管 dist 是否存在都注册——不存在时 sendSpaShell 会返回 500 并打日志，
-// 至少能在控制台看到原因，而不是静默 404。
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) return next()
-  sendSpaShell(req, res)
-})
 
 app.use((req, res) => {
   if (req.path.startsWith('/api')) {
