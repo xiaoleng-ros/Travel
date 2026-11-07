@@ -1426,7 +1426,14 @@ app.use('/seed-thumbs', express.static(path.join(ROOT, 'public', 'seed-thumbs'),
 app.use('/brand', express.static(path.join(ROOT, 'public', 'brand'), { maxAge: '7d' }))
 app.use(express.static(path.join(ROOT, 'public'), { maxAge: '7d' }))
 
-const distDir = path.join(ROOT, 'dist')
+// dist 目录可能在多个位置（本地开发在项目根，EdgeOne Cloud Functions
+// 打包后可能在 process.cwd()），逐个尝试，找到第一个存在的。
+const distCandidates = [
+  path.join(ROOT, 'dist'),
+  path.join(process.cwd(), 'dist'),
+  path.resolve(import.meta.dirname, 'dist'),
+]
+const distDir = distCandidates.find((d) => fs.existsSync(d)) || path.join(ROOT, 'dist')
 const distIndexFile = path.join(distDir, 'index.html')
 
 // dist/index.html 每次构建都会变，按 mtime 缓存一份原始 HTML，避免每个请求都读盘。
@@ -1450,25 +1457,33 @@ function injectAnalytics(html) {
   return output
 }
 
-if (fs.existsSync(distDir)) {
-  const sendSpaShell = (req, res) => {
-    try {
-      res.type('html')
-      res.set('Cache-Control', 'no-cache')
-      res.send(injectAnalytics(readIndexHtml()))
-    } catch (error) {
-      console.error('[spa]', error)
-      res.status(500).send('页面加载失败。')
-    }
+const sendSpaShell = (req, res) => {
+  try {
+    res.type('html')
+    res.set('Cache-Control', 'no-cache')
+    res.send(injectAnalytics(readIndexHtml()))
+  } catch (error) {
+    console.error('[spa]', error)
+    res.status(500).send('页面加载失败。')
   }
+}
+
+if (fs.existsSync(distDir)) {
+  console.log(`[spa] serving dist from ${distDir}`)
   // /index.html 直接走注入路由，否则 express.static 会吐出未注入的原始文件。
   app.get('/index.html', sendSpaShell)
   app.use(express.static(distDir, { index: false }))
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next()
-    sendSpaShell(req, res)
-  })
+} else {
+  console.error(`[spa] dist dir not found, tried: ${distCandidates.join(', ')}`)
 }
+
+// SPA catch-all：非 /api 的 GET 请求都返回 index.html，让前端路由接管。
+// 不管 dist 是否存在都注册——不存在时 sendSpaShell 会返回 500 并打日志，
+// 至少能在控制台看到原因，而不是静默 404。
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) return next()
+  sendSpaShell(req, res)
+})
 
 app.use((req, res) => {
   if (req.path.startsWith('/api')) {
