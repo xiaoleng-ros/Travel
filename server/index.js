@@ -90,6 +90,24 @@ app.use((_req, res, next) => {
 app.use(express.json({ limit: '2mb' }))
 app.use(cookieParser())
 
+// ---------------------------------------------------------------------------
+// 路径归一化
+//
+// EdgeOne Cloud Functions 把 cloud-functions/api/[[default]].js 映射到
+// /api/* 时，会**去掉 /api 前缀**再传给 Express——也就是请求 /api/photos，
+// Express 收到的 req.url 是 /photos。但我们的路由全是 /api/xxx 形式。
+// 这里检测：如果请求路径不以 /api 开头，且不是静态资源路径，就补回 /api。
+// 本地开发（node server/index.js）时路径已经带 /api，跳过。
+// ---------------------------------------------------------------------------
+const STATIC_PREFIXES = ['/uploads/', '/seed-thumbs/', '/brand/', '/assets/', '/index.html']
+app.use((req, _res, next) => {
+  const p = req.url
+  if (!p.startsWith('/api') && !STATIC_PREFIXES.some((s) => p.startsWith(s))) {
+    req.url = '/api' + (p.startsWith('/') ? p : '/' + p)
+  }
+  next()
+})
+
 // 数据层懒初始化：Serverless 冷启动时由第一个请求触发；本地则是启动时触发一次
 let readyPromise = null
 export function ready() {
