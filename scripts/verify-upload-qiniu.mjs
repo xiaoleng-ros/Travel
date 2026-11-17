@@ -1,5 +1,6 @@
 // 验证七牛模式的完整上传链路：token → 浏览器直传 → complete 落库 → 读图 → 删除
 import fs from 'node:fs'
+import { credentials } from './lib/credentials.mjs'
 import https from 'node:https'
 import sharp from 'sharp'
 
@@ -49,7 +50,7 @@ async function main() {
   const login = await fetch(`${BASE}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@memora.local', password: '123456789' }),
+    body: JSON.stringify(credentials()),
   })
   const cookie = (login.headers.getSetCookie?.() || []).map((c) => c.split(';')[0]).join('; ')
   console.log('login:', login.status)

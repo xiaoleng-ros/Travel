@@ -22,32 +22,52 @@ export const SEED_THUMB_DIR = path.join(ROOT, 'public', 'seed-thumbs')
 
 let cache = null
 
-// 仅在首次播种（库内还没有管理员）时，用环境变量 ADMIN_EMAIL / ADMIN_PASSWORD
-// 初始化默认管理员账号。正常启动时不再覆盖，否则你在后台「账户」页改过的邮箱、
-// 密码会在每次重启后被环境变量里的旧值冲掉。
-// 返回 true 表示发生了变更
-function applyAdminEnv(db) {
-  const email = process.env.ADMIN_EMAIL?.trim()
-  const password = process.env.ADMIN_PASSWORD
-  if (!email && !password) return false
-  const admin = db.users.find((u) => u.isAdmin) || db.users[0]
-  // 已有管理员：尊重后台改过的值，不再用环境变量覆盖
-  if (admin) return false
-  // 没有管理员：用环境变量的初始值建一个
-  const initEmail = email || 'admin@memora.local'
-  const initPassword = password || 'Memora@2026'
+// ---------------------------------------------------------------------------
+// 管理员初始化
+//
+// 原则：密码以数据库为准。
+// - 库里已有管理员：绝不用环境变量覆盖（后台改过的邮箱/密码不能被重启冲掉）。
+// - 仅当库里没有管理员时才创建：
+//   · 配置了 ADMIN_PASSWORD 就用它（首次部署引导）；
+//   · 没配置就生成随机强密码，hash 后入库，并**只在本次控制台打印一次**，
+//     提示登录后立即修改。密码不会写进任何文件、日志或文档。
+// - 生产环境不允许出现"随机密码没人知道"的死锁：新建管理员必须显式设置
+//   ADMIN_PASSWORD；库内已有管理员时不要求该变量。
+// ---------------------------------------------------------------------------
+
+// 生成一次性初始密码：24 位十六进制，足够强且便于手动输入。
+export function randomInitialPassword() {
+  return crypto.randomBytes(12).toString('hex')
+}
+
+// 返回 { changed, generated }：changed 表示是否新建了管理员，
+// generated 表示密码是随机生成的（供调用方决定是否打印一次性提示）。
+export function ensureAdmin(db) {
+  // 以数据库为准：只要库里已有账号，就不碰它。
+  if (db.users.length) return { changed: false, generated: false }
+
+  const email = process.env.ADMIN_EMAIL?.trim() || 'admin@memora.local'
+  const username = process.env.ADMIN_USERNAME?.trim() || 'admin'
+  const configured = process.env.ADMIN_PASSWORD
+  const generated = !configured
+  const password = configured || randomInitialPassword()
+
+  if (generated && process.env.NODE_ENV === 'production') {
+    throw new Error('[admin] 生产环境首次部署必须设置 ADMIN_PASSWORD（库内已有管理员则无需设置）')
+  }
+
   db.users.push({
     id: 1,
-    email: initEmail,
-    username: process.env.ADMIN_USERNAME?.trim() || 'admin',
-    passwordHash: bcrypt.hashSync(initPassword, 10),
+    email,
+    username,
+    passwordHash: bcrypt.hashSync(password, 10),
     avatar: '',
     isAdmin: true,
     createdAt: new Date().toISOString(),
     passwordChangedAt: null,
   })
-  console.log(`[admin] seeded from env: ${initEmail}`)
-  return true
+
+  return { changed: true, generated, email, password }
 }
 
 // ---------------------------------------------------------------------------
@@ -61,11 +81,18 @@ export async function initStore() {
     db = seedDatabase(db)
     await flushDb(db)
   }
-  if (applyAdminEnv(db)) await flushDb(db)
+  const admin = ensureAdmin(db)
+  if (admin.changed) await flushDb(db)
 
   cache = db
   bindDb(db)
   console.log(`[store] driver=${driver} photos=${db.photos.length} albums=${db.albums.length}`)
+  if (admin.generated) {
+    console.warn('[admin] 已创建管理员（随机初始密码，仅显示这一次）:')
+    console.warn(`[admin]   email:     ${admin.email}`)
+    console.warn(`[admin]   password:  ${admin.password}`)
+    console.warn('[admin] 请登录后立即在「账户」页修改密码。该密码不会再次显示，也未写入任何文件。')
+  }
   return db
 }
 
@@ -152,23 +179,11 @@ function seedDatabase(base) {
   db.settings.app.socialLinks = db.settings.app.socialLinks || '[]'
   db.settings.app['appearance.homeHeaderLayout'] = 'topbar'
 
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@memora.local'
-  const adminPassword = process.env.ADMIN_PASSWORD || 'Memora@2026'
-  db.users = [
-    {
-      id: 1,
-      email: adminEmail,
-      username: process.env.ADMIN_USERNAME || 'LiuShen',
-      passwordHash: bcrypt.hashSync(adminPassword, 10),
-      avatar: '',
-      isAdmin: true,
-      createdAt: new Date().toISOString(),
-      passwordChangedAt: null,
-    },
-  ]
+  // 管理员账号统一由 initStore() 里的 ensureAdmin() 创建：
+  // 密码以数据库为准，代码里不再保留任何硬编码口令。
+  db.users = []
 
   console.log(`[seed] imported ${db.photos.length} photos, ${db.albums.length} albums`)
-  console.log(`[seed] admin account: ${adminEmail} / ${adminPassword}`)
   return db
 }
 

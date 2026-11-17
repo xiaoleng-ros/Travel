@@ -1,11 +1,12 @@
 // 端到端验证：登录 → 改标题（UTF-8）→ 读回 → 确认落盘
+import { credentials } from './lib/credentials.mjs'
 const BASE = 'http://127.0.0.1:3001'
 
 async function main() {
   const login = await fetch(`${BASE}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@memora.local', password: '123456789' }),
+    body: JSON.stringify(credentials()),
   })
   const cookie = (login.headers.getSetCookie?.() || []).map((c) => c.split(';')[0]).join('; ')
   console.log('login:', login.status, cookie ? 'cookie ok' : 'NO COOKIE')

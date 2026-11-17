@@ -1,6 +1,9 @@
 // 验证照片编辑弹窗的 X 按钮 / 遮罩关闭
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { credentials } from './lib/credentials.mjs'
+
+const AUTH_JSON = JSON.stringify(credentials())
 
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 const PORT = 9353
@@ -80,7 +83,7 @@ async function main() {
   await send('Page.navigate', { url: `${BASE}/signin` })
   await sleep(3500)
   const loginStatus = await evaluate(
-    `fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'admin@memora.local',password:'123456789'})}).then(r=>r.status)`,
+    `fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:${AUTH_JSON}}).then(r=>r.status)`,
   )
   console.log('login status:', loginStatus)
 

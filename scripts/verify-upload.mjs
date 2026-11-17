@@ -1,5 +1,6 @@
 // 验证上传链路（本地模式）：POST /api/admin/upload → 检查文件与 db
 import fs from 'node:fs'
+import { credentials } from './lib/credentials.mjs'
 
 const BASE = 'http://127.0.0.1:3001'
 
@@ -7,7 +8,7 @@ async function main() {
   const login = await fetch(`${BASE}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@memora.local', password: '123456789' }),
+    body: JSON.stringify(credentials()),
   })
   const cookie = (login.headers.getSetCookie?.() || []).map((c) => c.split(';')[0]).join('; ')
   console.log('login:', login.status)

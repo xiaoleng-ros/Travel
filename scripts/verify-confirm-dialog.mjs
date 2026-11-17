@@ -1,6 +1,9 @@
 // 验证卡片式确认框：点删除相册 -> 截确认卡片 -> 点取消 -> 再点删除 -> 点确定
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { credentials } from './lib/credentials.mjs'
+
+const AUTH_JSON = JSON.stringify(credentials())
 
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 const PORT = 9347
@@ -84,7 +87,7 @@ async function main() {
     const r = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'admin@memora.local', password: '123456789' }),
+      body: ${AUTH_JSON},
     });
     return r.status;
   })()`)

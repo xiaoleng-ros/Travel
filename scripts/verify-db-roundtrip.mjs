@@ -1,11 +1,12 @@
 // 验证「API 写入 → Turso 持久化」闭环：建一个临时相册，确认落库，再删掉
+import { credentials } from './lib/credentials.mjs'
 const BASE = 'http://127.0.0.1:3001'
 
 async function login() {
   const r = await fetch(`${BASE}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@memora.local', password: '123456789' }),
+    body: JSON.stringify(credentials()),
   })
   if (r.status !== 200) throw new Error('登录失败 ' + r.status)
   return r.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ')

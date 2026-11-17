@@ -1,6 +1,9 @@
 // 验证照片删除 + 回收站彻底删除也用卡片式确认框
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { credentials } from './lib/credentials.mjs'
+
+const AUTH_JSON = JSON.stringify(credentials())
 
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 const PORT = 9349
@@ -75,7 +78,7 @@ async function main() {
 
   await send('Page.navigate', { url: `${BASE}/signin` })
   await sleep(3500)
-  await evaluate(`fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'admin@memora.local',password:'123456789'})}).then(r=>r.status)`)
+  await evaluate(`fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:${AUTH_JSON}}).then(r=>r.status)`)
 
   // ---- 1. 照片页：编辑弹窗里的删除 ----
   await send('Page.navigate', { url: `${BASE}/admin/photos` })

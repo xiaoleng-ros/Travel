@@ -1,6 +1,9 @@
 // 登录后截图后台页面
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { credentials } from './lib/credentials.mjs'
+
+const AUTH_JSON = JSON.stringify(credentials())
 
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 const PORT = 9334
@@ -85,7 +88,7 @@ async function main() {
         const r = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'admin@memora.local', password: '123456789' }),
+          body: ${AUTH_JSON},
           credentials: 'include',
         })
         return r.status

@@ -58,7 +58,6 @@ const ROOT = path.resolve(import.meta.dirname, '..')
 const PORT = Number(process.env.PORT || 3001)
 const JWT_SECRET =
   process.env.JWT_SECRET || 'memora-local-development-secret-please-change-me-2026'
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@memora.local'
 
 // 生产环境强制要求设置 JWT_SECRET，否则直接退出——避免用公开的默认密钥签发 token
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
@@ -182,6 +181,35 @@ app.use(attachUser)
 function requireAuth(req, res, next) {
   if (!req.user) return res.status(401).json({ message: '请先登录。' })
   next()
+}
+
+// 统计脚本等敏感设置只有管理员能改；普通登录用户一律拒绝。
+function requireAdmin(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: '请先登录。' })
+  if (!req.user.isAdmin) return res.status(403).json({ message: '需要管理员权限。' })
+  next()
+}
+
+// 校验「访问统计」脚本：只允许外链 <script src="https://...">，
+// 拒绝内联脚本、事件处理属性与非 https 地址，避免存储型 XSS。
+function validateAnalyticsScripts(value) {
+  if (value === undefined || value === null) return null
+  const text = String(value)
+  if (!text.trim()) return null
+  // 逐个 <script ...> 标签检查
+  const openTags = text.match(/<script\b[^>]*>/gi) || []
+  const closeTags = text.match(/<\/script\s*>/gi) || []
+  if (openTags.length !== closeTags.length) return '脚本标签不完整'
+  for (const tag of openTags) {
+    if (/\bon\w+\s*=/i.test(tag)) return '不允许事件处理属性'
+    const src = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)
+    if (!src) return '只允许外链脚本（必须带 https:// 的 src）'
+    if (!/^https:\/\//i.test(src[1])) return '脚本地址必须使用 https://'
+  }
+  // 不允许标签之间出现内联内容（白字符除外）
+  const between = text.replace(/<script\b[^>]*>/gi, '').replace(/<\/script\s*>/gi, '')
+  if (between.trim()) return '不允许内联脚本内容'
+  return null
 }
 
 function userSummary(user) {
@@ -669,10 +697,17 @@ app.get('/api/system/settings/fields', requireAuth, (_req, res) => {
   res.json({ data: publicSettings() })
 })
 
-app.post('/api/system/settings/batch', requireAuth, (req, res) => {
+app.post('/api/system/settings/batch', requireAdmin, (req, res) => {
   const data = req.body?.data || req.body
-  const next = saveSettings(data)
-  res.json({ success: true, data: next })
+  const analytics = data?.analytics || {}
+  for (const field of ['headScripts', 'bodyScripts']) {
+    const error = validateAnalyticsScripts(analytics[field])
+    if (error) {
+      return res.status(400).json({ message: `访问统计脚本不合法：${error}` })
+    }
+  }
+  const saved = saveSettings(data)
+  res.json({ success: true, data: saved })
 })
 
 // ---------------------------------------------------------------------------
@@ -1560,7 +1595,6 @@ if (shouldListen) {
       app.listen(PORT, () => {
         console.log(`[memora] API server listening on http://localhost:${PORT}`)
         console.log(`[memora] db driver: ${getDriver()} / storage: ${storageKind()}`)
-        console.log(`[memora] admin email: ${ADMIN_EMAIL}`)
       })
     })
     .catch((err) => {
